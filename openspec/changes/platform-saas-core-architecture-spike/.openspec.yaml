@@ -1,0 +1,8 @@
+linked_issue: null
+hub_parent: null
+status: in_progress
+type: spike
+note: |
+  Originally tracked under a separate downstream issue/epic in the
+  consumer project from which this spike was mirrored. Cleared in
+  fastsaas; will re-link to FASTSAAS-owned tracker once established.
