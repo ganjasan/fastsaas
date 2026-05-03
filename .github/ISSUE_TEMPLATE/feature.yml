@@ -1,0 +1,36 @@
+name: Feature
+description: New capability in backend or frontend
+title: "[Feature] "
+labels: ["type/feature"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Primary component
+      options:
+        - backend/api
+        - backend/identity
+        - backend/tenants
+        - backend/audit
+        - frontend/features
+        - frontend/components
+        - infra / deploy
+        - cross-cutting
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria

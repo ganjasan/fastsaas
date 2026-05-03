@@ -1,0 +1,27 @@
+name: Task (platform)
+description: Implementation task without direct user-facing outcome (refactor, infra, chore)
+title: "[Task] "
+labels: ["type/task"]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why is this needed? Reference the epic / ADR / bug that motivates it.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What's in and what's explicitly out.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done

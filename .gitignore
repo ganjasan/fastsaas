@@ -30,3 +30,11 @@ build/
 .env
 .env.local
 .env.*.local
+
+# Build artifacts
+*.tsbuildinfo
+.vite/
+
+# Per-env overrides
+.env.local
+.env.*.local

@@ -1,0 +1,234 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (pytest + ruff)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fastsaas
+          POSTGRES_PASSWORD: dev
+          POSTGRES_DB: fastsaas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fastsaas -d fastsaas"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      mailhog:
+        image: mailhog/mailhog:latest
+        ports:
+          - 1025:1025
+          - 8025:8025
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://app_user:dev@localhost:5432/fastsaas
+      DATABASE_URL_MIGRATOR: postgresql+asyncpg://alembic_migrator:dev@localhost:5432/fastsaas
+      REDIS_URL: redis://localhost:6379/0
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install backend deps
+        working-directory: backend
+        run: uv sync --all-extras
+
+      - name: Bootstrap Postgres roles
+        env:
+          PGPASSWORD: dev
+        run: psql -h localhost -U fastsaas -d fastsaas -f infra/postgres/init/01-roles.sql
+
+      - name: Apply migrations
+        working-directory: backend
+        run: uv run alembic upgrade head
+
+      - name: Lint (ruff)
+        working-directory: backend
+        run: uv run ruff check .
+
+      - name: Tests (pytest)
+        working-directory: backend
+        run: uv run pytest -v
+
+  frontend:
+    name: Frontend (vitest + biome)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint (biome)
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Tests (vitest)
+        working-directory: frontend
+        run: npm test -- --run
+
+      - name: TypeScript build
+        working-directory: frontend
+        run: npm run build
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fastsaas
+          POSTGRES_PASSWORD: dev
+          POSTGRES_DB: fastsaas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fastsaas -d fastsaas"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      mailhog:
+        image: mailhog/mailhog:latest
+        ports:
+          - 1025:1025
+          - 8025:8025
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://app_user:dev@localhost:5432/fastsaas
+      DATABASE_URL_MIGRATOR: postgresql+asyncpg://alembic_migrator:dev@localhost:5432/fastsaas
+      REDIS_URL: redis://localhost:6379/0
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+      VITE_API_BASE_URL: http://localhost:8000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+      - run: uv python install 3.12
+      - working-directory: backend
+        run: uv sync --all-extras
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Bootstrap Postgres roles
+        env:
+          PGPASSWORD: dev
+        run: psql -h localhost -U fastsaas -d fastsaas -f infra/postgres/init/01-roles.sql
+
+      - name: Apply migrations
+        working-directory: backend
+        run: uv run alembic upgrade head
+
+      - name: Start backend
+        working-directory: backend
+        run: |
+          uv run uvicorn fastsaas.main:app --host 0.0.0.0 --port 8000 &
+          for i in {1..30}; do
+            if curl -sf http://localhost:8000/health >/dev/null; then echo "backend up"; exit 0; fi
+            sleep 1
+          done
+          echo "backend failed to start" && exit 1
+
+      - name: Playwright tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+  codegen-drift:
+    name: OpenAPI codegen drift
+    runs-on: ubuntu-latest
+    needs: [backend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+      - run: uv python install 3.12
+      - working-directory: backend
+        run: uv sync --all-extras
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+
+      - name: Dump OpenAPI
+        working-directory: backend
+        run: uv run python -c "import json; from fastsaas.main import app; print(json.dumps(app.openapi(), indent=2))" > openapi.json
+
+      - name: Run orval
+        working-directory: frontend
+        run: npm run codegen
+
+      - name: Check no drift
+        run: |
+          if ! git diff --exit-code frontend/src/api/generated/ 2>&1; then
+            echo "::error::Generated API client is out of sync with backend OpenAPI. Run 'make codegen' and commit."
+            exit 1
+          fi

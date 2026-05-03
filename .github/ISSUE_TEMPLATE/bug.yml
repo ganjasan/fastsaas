@@ -1,0 +1,50 @@
+name: Bug (platform)
+description: Defect in orchestrator backend or UI runtime
+title: "[Bug] "
+labels: ["type/bug", "status/needs-triage"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - backend/api
+        - backend/registry
+        - backend/execution
+        - backend/data
+        - backend/tenants
+        - backend/audit
+        - backend/cache
+        - frontend/renderer
+        - frontend/views
+        - deploy / infra
+    validations:
+      required: true
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Build SHA, tenant, model image + version, browser if frontend.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: text
