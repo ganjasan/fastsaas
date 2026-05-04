@@ -103,3 +103,21 @@ async def send_password_reset(to: str, raw_token: str) -> None:
         url=_build_url("/auth/reset-password", raw_token),
         app_name=name,
     )
+
+
+async def send_org_invitation(
+    to: str, raw_token: str, *, org_name: str, inviter_email: str
+) -> None:
+    """Org-invite link, valid 7 days. The accept page lives at
+    `/orgs/accept-invite/<token>` on the SPA; the backend exposes the
+    matching `POST /orgs/{slug}/members/accept` endpoint."""
+    name = get_settings().app_name
+    await send(
+        to=to,
+        subject=f"You're invited to {org_name} on {name}",
+        template="org_invitation",
+        url=_build_url("/orgs/accept-invite", raw_token),
+        app_name=name,
+        org_name=org_name,
+        inviter_email=inviter_email,
+    )

@@ -64,13 +64,21 @@ linked_issue: ganjasan/fastsaas#3
 
 ## 6. Membership service + endpoints
 
-- [ ] 6.1 `MembershipService.invite(org, email, role)` — issues `org_invitation` magic-link (uses existing magic-link infra, purpose already supported)
-- [ ] 6.2 `MembershipService.accept(token, actor)` — validates token, inserts member, mints role bundle (default `role:member`)
-- [ ] 6.3 `MembershipService.change_role(actor_id, new_bundle)` — revoke + mint
-- [ ] 6.4 `MembershipService.remove(actor_id)` — delete row + revoke all bundles
-- [ ] 6.5 `api/orgs.py` — POST /orgs/{slug}/members/invite, POST /orgs/{slug}/members/accept, PATCH /orgs/{slug}/members/{actor_id}, DELETE /orgs/{slug}/members/{actor_id}, GET /orgs/{slug}/members
-- [ ] 6.6 Email template `org-invitation.html` (jinja, `{{ app_name }}`, `{{ inviter }}`, `{{ org_name }}`, link)
-- [ ] 6.7 Tests — invite + accept happy path; expired token; role change revokes old bundle; remove cascades capabilities
+> Invitations live in their own table `org_invitations` (migration 0005),
+> not in `magic_link_tokens`. The latter requires `actor_id NOT NULL`, but
+> an invitee may not yet be an actor (pre-registration is the common case).
+> Standard SaaS shape: own token hash, own TTL (7 days), own RLS isolation.
+
+- [x] 6.1 `MembershipService.invite(org_id, email, role, invited_by)` — mints an `OrgInvitation` row with `sha256(token)` at rest; raw token returned only to the email task.
+- [x] 6.2 `MembershipService.accept(raw_token, accepting_actor_id)` — atomic UPDATE...RETURNING that consumes the token, inserts the membership row, and mints the role bundle (`role:member` / `role:admin` / `role:viewer` / `role:compliance_officer`) for every existing project.
+- [x] 6.3 `MembershipService.change_role(org_id, target_actor_id, new_role, actor_id)` — revoke old bundle + mint new in one transaction; refuses to demote the last OWNER.
+- [x] 6.4 `MembershipService.remove(org_id, target_actor_id, actor_id)` — delete membership row + soft-revoke every Capability tagged with `metadata.org_id`; refuses to remove the last OWNER.
+- [x] 6.5 `MembershipService.list_members` + `list_pending_invites` for the admin members page.
+- [x] 6.6 `api/orgs.py` — `GET /orgs/{slug}/members`, `POST /orgs/{slug}/members/invite`, `POST /orgs/members/accept`, `PATCH /orgs/{slug}/members/{actor_id}`, `DELETE /orgs/{slug}/members/{actor_id}`. All wired through `tenant_context` + capability checks.
+- [x] 6.7 Email template `org_invitation.{txt,html}.j2` + `email.send_org_invitation(to, raw, *, org_name, inviter_email)`.
+- [x] 6.8 Migration 0005 — `org_invitations` table with role CHECK, indexes on `(org_id) WHERE consumed_at IS NULL`, RLS `tenant_isolation`, GRANT to `app_user`.
+- [x] 6.9 Bundle fix: `role:owner` and `role:admin` now mint `read:organisation` explicitly. `can()` is a literal predicate, so admin no longer "implies" read; without the explicit row, owners would 403 on `GET /orgs/{slug}/members`.
+- [x] 6.10 Tests — `tests/test_api_members.py` (9 integration): invite/accept happy path; invite as `owner` rejected; invite of existing member 409; accept with unknown / expired token 404; non-admin invite 403; change_role revokes old + mints new; last-owner protection on change_role + remove; remove revokes capabilities and the member loses visibility.
 
 ## 7. Project service + endpoints
 

@@ -61,6 +61,11 @@ def Cap(op: str, resource: str, *, scope: str = "self") -> CapabilityTemplate:  
 
 BUNDLES: dict[str, list[CapabilityTemplate]] = {
     "role:owner": [
+        # admin/share imply read for the same resource type, but `can()` is a
+        # literal predicate (no implication graph), so we mint the read row
+        # explicitly. Otherwise GET /orgs/{slug}/members and similar reads
+        # would 403 for owners.
+        Cap("read",   "organisation", scope="self"),
         Cap("admin",  "organisation", scope="self"),
         Cap("share",  "organisation", scope="self"),
         Cap("admin",  "project",      scope="all_in_org"),
@@ -73,6 +78,8 @@ BUNDLES: dict[str, list[CapabilityTemplate]] = {
         Cap("grant",  "service",      scope="self"),
     ],
     "role:admin": [
+        Cap("read",  "organisation", scope="self"),
+        Cap("admin", "organisation", scope="self"),
         Cap("admin", "project",   scope="all_in_org"),
         Cap("share", "project",   scope="all_in_org"),
         Cap("write", "project",   scope="all_in_org"),
