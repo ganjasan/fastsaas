@@ -20,6 +20,7 @@ from fastsaas.api.projects import (
 from fastsaas.api.projects import (
     router as projects_router,
 )
+from fastsaas.audit import AuditContextMiddleware
 from fastsaas.cache import close_redis, get_redis
 from fastsaas.config import get_settings
 from fastsaas.db import close_engine, session_scope
@@ -37,6 +38,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title=get_settings().app_name, version=__version__, lifespan=lifespan)
+
+# Audit context middleware sets `actor_var` and `intent_var` for every
+# request so service-layer `record(...)` calls and `AuditedModel` mapper
+# events have an actor + intent to attach to the audit row.
+app.add_middleware(AuditContextMiddleware)
+
 app.include_router(auth_router)
 app.include_router(orgs_router)
 app.include_router(projects_router)

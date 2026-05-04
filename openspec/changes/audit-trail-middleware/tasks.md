@@ -7,15 +7,15 @@ linked_issue: ganjasan/fastsaas#4
 
 ## 1. Audit core module
 
-- [ ] 1.1 `backend/src/fastsaas/audit/__init__.py` — public API re-exports (`record`, `AuditedModel`, `audit_context_middleware`).
-- [ ] 1.2 `audit/models.py` — `AuditLog` SQLModel mirroring migration-0001 schema.
-- [ ] 1.3 `audit/context.py` — `actor_var`, `intent_var`, `IntentContext` dataclass.
-- [ ] 1.4 `audit/intent.py::compute_intent_hash(request)` — prefixed sources `idem:` / `agent:` / `sess:` / `req:` per spike Decision #6.
-- [ ] 1.5 `audit/redact.py` — `GLOBAL_REDACT` denylist + `redact(diff, *, extra: set[str])`.
-- [ ] 1.6 `audit/service.py::record(db, ..., action, entity_type, entity_id, diff, ...)` — explicit write API; uses contextvars for actor + intent fallbacks; runs inside the caller's transaction.
-- [ ] 1.7 `audit/mixin.py::AuditedModel` — base class + mapper-event listeners (`after_insert / after_update / after_delete`); soft-delete flip detection; `__audit_skip__` / `__audit_redact__` / `__audit_entity_type__` class attributes.
-- [ ] 1.8 `audit/middleware.py::AuditContextMiddleware` — sets `actor_var` + `intent_var` for request lifetime; best-effort actor resolution.
-- [ ] 1.9 Wire middleware in `main.py` after identity middleware.
+- [x] 1.1 `backend/src/fastsaas/audit/__init__.py` — public API re-exports (`record`, `AuditedModel`, `AuditContextMiddleware`).
+- [x] 1.2 `audit/models.py` — `AuditLog` SQLModel mirroring migration-0001 schema.
+- [x] 1.3 `audit/context.py` — `actor_var`, `intent_var`, `IntentContext` dataclass.
+- [x] 1.4 `audit/intent.py::compute_intent_hash(request)` — prefixed sources `idem:` / `agent:` / `sess:` / `req:` per spike Decision #6.
+- [x] 1.5 `audit/redact.py` — `GLOBAL_REDACT` denylist + `redact(diff, *, extra: set[str])`.
+- [x] 1.6 `audit/service.py::record(db, ..., action, entity_type, entity_id, diff, ...)` — explicit write API; uses contextvars for actor + intent fallbacks; runs inside the caller's transaction.
+- [x] 1.7 `audit/mixin.py::AuditedModel` — base class + mapper-event listeners (`Mapper`-level + `isinstance` filter); soft-delete flip detection; `__audit_skip__` / `__audit_redact__` / `__audit_entity_type__` class attributes.
+- [x] 1.8 `audit/middleware.py::AuditContextMiddleware` — sets `actor_var` + `intent_var` for request lifetime; best-effort actor resolution.
+- [x] 1.9 Wire middleware in `main.py` after identity middleware.
 
 ## 2. Service-layer integration (core)
 
@@ -36,13 +36,13 @@ linked_issue: ganjasan/fastsaas#4
 ## 3. Wiegers documentation
 
 - [x] 3.1 **Stakeholder profile** — `requirements/formal/stakeholders/SH-compliance-officer.md` (Wiegers form): goals, authority/responsibilities, tasks, success metrics, pain points, capability-creep risks, GDPR-vs-immortality conflict, downstream coverage-drift mitigation. Pinned `draft` until interviewed.
-- [ ] 3.2 ADR-010 amendment — append "Extension contract for downstream products" section to `requirements/decisions/ADR-010_audit-log-shape.md`:
+- [x] 3.2 ADR-010 amendment — append "Extension contract for downstream products" section to `requirements/decisions/ADR-010_audit-log-shape.md`:
    - `entity_type` open vocabulary + naming convention.
    - Two write paths: explicit `record(...)` and `AuditedModel` mixin.
    - `actor_var` / `intent_var` contextvars as the canonical handoff.
    - `__audit_redact__` extends global denylist, never replaces it.
    - Reference SH-compliance-officer as the consumer profile this contract serves.
-- [ ] 3.3 Update `traces_to:` frontmatter on ADR-010 to reference this change + the stakeholder profile.
+- [x] 3.3 Update `traces_to:` frontmatter on ADR-010 to reference this change + the stakeholder profile.
 
 ## 4. Documentation for Claude
 
