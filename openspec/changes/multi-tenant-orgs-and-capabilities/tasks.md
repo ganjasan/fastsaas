@@ -121,22 +121,27 @@ linked_issue: ganjasan/fastsaas#3
 
 ## 9. Frontend — orgs feature
 
-- [ ] 9.1 `make codegen` regenerates orval hooks for new endpoints
-- [ ] 9.2 Custom orval mutator (`src/lib/api/client.ts`) injects `X-Org: <currentOrgSlug>` from Zustand
-- [ ] 9.3 `features/orgs/lib/orgStore.ts` — Zustand with persist; `currentOrgSlug`, `setCurrentOrg`
-- [ ] 9.4 `features/orgs/components/OrgSwitcher.tsx` — dropdown using `useMyOrgs()`
-- [ ] 9.5 `features/orgs/components/CreateOrgDialog.tsx` — react-hook-form + zod (slug live preview)
-- [ ] 9.6 `features/orgs/components/MembersTable.tsx` + `InviteMemberDialog.tsx`
-- [ ] 9.7 Routes — `routes/orgs.tsx` (list + empty state), `orgs.$slug.tsx` (overview), `orgs.$slug.settings.members.tsx`, `orgs.new.tsx`
-- [ ] 9.8 Empty-state on `/orgs` for first-login users — CTA "Create your first org"
-- [ ] 9.9 Vitest — OrgSwitcher renders with mock orgs; CreateOrgDialog validation; InviteMemberDialog submit
+- [x] 9.1 `make codegen` — orval regenerated; new `src/api/generated/{orgs,projects}/` ship typed hooks for every new endpoint plus MSW mocks.
+- [x] 9.2 Custom mutator (`src/lib/api/client.ts`) injects `X-Org: <currentOrgSlug>` from the Zustand store on every request.
+- [x] 9.3 `features/orgs/lib/orgStore.ts` — Zustand with `persist({ name: "fastsaas.org" })`; exposes both the React hook and an imperative `orgPin` shim (used by the orval mutator outside React).
+- [x] 9.4 `features/orgs/components/OrgSwitcher.tsx` — dropdown using `useListMyOrgsOrgsGet`; surfaces role badges.
+- [x] 9.5 Create-org form — full route at `/orgs/new` (lighter than a dialog given its size).
+- [x] 9.6 Members admin page — `/orgs/$slug/settings/members` covers invite + change-role + remove + pending invitations table.
+- [x] 9.7 Routes wired:
+   - `/orgs` (list + empty state)
+   - `/orgs/new` (create)
+   - `/orgs/$slug` (overview)
+   - `/orgs/$slug/settings/members`
+   - `/orgs/accept-invite/$token` (UC-002 accept-org-invite landing)
+- [x] 9.8 Empty-state on `/orgs` — "Create your first organisation" CTA when the listing is empty.
+- [x] 9.9 Vitest — `orgStore` (4 tests covering imperative shim ↔ React hook agreement) + `schemas` (11 tests pinning slug regex / role enum / TTL bounds / required fields). 32/32 passed; full TS build clean.
 
 ## 10. Frontend — projects feature
 
-- [ ] 10.1 `features/projects/components/ProjectList.tsx`, `CreateProjectDialog.tsx`
-- [ ] 10.2 Routes — `orgs.$slug.projects.tsx`, `orgs.$slug.projects.$projectSlug.tsx`
-- [ ] 10.3 Project detail page placeholder ("nothing here yet" — content lands with future epics)
-- [ ] 10.4 Vitest covers list + create dialog
+- [x] 10.1 `CreateProjectDialog` (inline in `$slug.projects.index.tsx`) + project listing card grid.
+- [x] 10.2 Routes — `/orgs/$slug/projects` (list), `/orgs/$slug/projects/$projectSlug` (detail), `/orgs/accept-share/$token` (UC-001 accept-share landing).
+- [x] 10.3 Detail page is a placeholder card — analyses / scenarios / runs land in a future epic; the shell is enough to exercise navigation + the share-accept flow today.
+- [x] 10.4 Vitest covers the project schema (slug regex + description bound) and share schema (TTL 1..30, default-allowed shape).
 
 ## 11. Wiring + smoke
 

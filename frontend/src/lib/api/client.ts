@@ -4,9 +4,17 @@
  * On a 401 response we attempt a single in-flight refresh via `recoverFrom401`,
  * then retry the original request once with the new access token. If refresh
  * itself fails the user is redirected to /auth/login by `recoverFrom401`.
+ *
+ * Outgoing requests carry an `X-Org: <slug>` header when a slug is pinned in
+ * the org store — that's how `tenants.dependencies.tenant_context` resolves
+ * which org the request belongs to. Pre-tenant routes (`/auth/*`,
+ * `/orgs` listing/create, `/orgs/members/accept`,
+ * `/orgs/projects/accept-share`) ignore the header server-side, so it's
+ * always safe to send.
  */
 import { tokenStore } from "@/features/auth/lib/authStore";
 import { recoverFrom401 } from "@/features/auth/lib/refreshFlow";
+import { orgPin } from "@/features/orgs/lib/orgStore";
 
 export type ApiError = { status: number; body: unknown };
 
@@ -32,6 +40,8 @@ async function doFetch(config: ApiClientConfig, accessToken: string | null): Pro
     ...config.headers,
   };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const orgSlug = orgPin.get();
+  if (orgSlug && !headers["X-Org"]) headers["X-Org"] = orgSlug;
 
   return fetch(url, {
     method: config.method,
