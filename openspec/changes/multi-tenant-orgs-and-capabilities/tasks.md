@@ -35,13 +35,21 @@ linked_issue: ganjasan/fastsaas#3
 - [x] 3.7 `dependencies.py::require_capability(op, res_type)` FastAPI dependency
 - [x] 3.8 Unit tests — bundle catalogue invariants (`test_authz_bundles.py`, 11 tests); slug validator (`test_tenants_slugs.py`, 15 tests). DB-touching matrix (mint/revoke + RLS) deferred to step 1.7-unblocked.
 
-## 4. Tenant context middleware
+## 4. Tenant context dependency
 
-- [ ] 4.1 `backend/src/fastsaas/tenants/middleware.py::tenant_context` per design.md §D4
-- [ ] 4.2 `require_org` dependency surfaces `request.state.org`
-- [ ] 4.3 Guest path: tolerate missing `organisation_members` row when `can(read, project, any_in_org)` is true (UC-001)
-- [ ] 4.4 Wire into `main.py` after identity middleware
-- [ ] 4.5 Tests — non-member gets 404 (no info leak); valid member sets `app.current_org`; guest with capability passes
+> Realised as a FastAPI `Depends(tenant_context)` rather than ASGI middleware
+> — keeps the same DB session as the route via per-request Depends caching,
+> so `SET LOCAL` lives on the route's transaction. Org-by-slug bootstrap goes
+> through a short BYPASSRLS migrator session because RLS on `organisations`
+> needs `app.current_org` to be set, which we don't know until after the
+> lookup itself.
+
+- [x] 4.1 `backend/src/fastsaas/tenants/dependencies.py::tenant_context(slug)` returns `TenantContext(org, actor, is_guest)`; sets `app.current_org` + `app.current_actor` LOCAL on the request session.
+- [x] 4.2 `require_org_member` dependency rejects guests for member-only routes (e.g. members listing).
+- [x] 4.3 Guest path: tolerate missing `organisation_members` row when an active capability with `metadata.org_id = org.id` exists (UC-001).
+- [ ] 4.4 Wire into routers — `Depends(tenant_context)` lands on every `/orgs/{slug}/...` endpoint in phases 5–8.
+- [x] 4.5 Tests — `tests/test_tenants_context.py` covers: unknown slug → None; member → `is_guest=False`; non-member → None (no info leak); guest with capability → `is_guest=True`; revoked capability ignored; soft-deleted org invisible.
+- [x] 4.6 `db.py` — second engine `migrator_engine` (BYPASSRLS, small pool) + `migrator_session_scope()` for the bootstrap lookup. Disposed alongside the main engine.
 
 ## 5. Org service + endpoints
 
