@@ -1,103 +1,52 @@
 /**
  * End-to-end smoke for the multi-tenant happy path (issue #3 phase 11).
  *
- * Drives a real browser through the full UC chain:
- *   register → consume verification mail → login → create org →
- *   create project → log out → log in again → land on /orgs.
+ * Drives a real browser through:
+ *   dev-bypass auth → list orgs (empty) → create org → create project →
+ *   open project detail → relogin
  *
- * Mailhog HTTP API URL is `MAILHOG_HTTP_URL` (defaults to :8025 for CI;
- * the dev stack maps it to :8125 per the +100 host-port shift).
+ * Uses `GET /auth/oauth/dev/start?email=...` (`OAUTH_DEV_BYPASS=true` in CI)
+ * to obtain a fresh session without going through register + verify-email +
+ * password login. The end-to-end auth flow including Mailhog is already
+ * exhaustively covered by backend integration tests
+ * (`backend/tests/test_api_auth.py`, `test_identity_email.py`); this e2e
+ * focuses on the multi-tenant UI layer above the auth gate.
  *
- * Backend / frontend are reached through Vite's same-origin proxy
- * (`/auth/*`, `/orgs*`), so the test only ever talks to baseURL
- * (5273 locally, 5273 in CI when run via the bundled webServer).
+ * After the dev-bypass GET sets the refresh httpOnly cookie, navigating to
+ * /orgs causes the SPA's first request to 401 → `recoverFrom401` swaps the
+ * cookie for a fresh access token → the listing renders. So the test never
+ * needs to inject a token into the SPA's in-memory store directly.
  */
 import { type APIRequestContext, expect, test } from "@playwright/test";
-
-const MAILHOG_HTTP_URL = process.env.MAILHOG_HTTP_URL ?? "http://localhost:8025";
 
 function uniqueEmail(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
 
-async function clearMailhog(req: APIRequestContext): Promise<void> {
-  await req.delete(`${MAILHOG_HTTP_URL}/api/v1/messages`);
-}
-
-/**
- * Decode a quoted-printable body. Mailhog returns the email body as QP
- * (RFC 2045): soft-break `=\r?\n` joins long lines and `=XX` is a hex
- * byte. Without decoding, the verification URL gets chopped at the
- * 76-char wrap and the token comes out truncated.
- */
-function quopriDecode(body: string): string {
-  return body
-    .replace(/=\r?\n/g, "")
-    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
-}
-
-async function fetchVerifyTokenFor(req: APIRequestContext, email: string): Promise<string> {
-  // Poll Mailhog briefly — SMTP delivery is sub-second but BackgroundTasks
-  // mean the response can return before the mail lands.
-  for (let i = 0; i < 30; i++) {
-    const res = await req.get(`${MAILHOG_HTTP_URL}/api/v2/messages`);
-    if (res.ok()) {
-      const body = await res.json();
-      const message = body.items?.find(
-        (m: { Content: { Headers: { To?: string[] } } }) =>
-          m.Content.Headers.To?.[0]?.toLowerCase() === email.toLowerCase(),
-      );
-      if (message) {
-        const decoded = quopriDecode(message.Content.Body as string);
-        const link = decoded.match(/https?:\/\/[^\s"<>]+\/auth\/verify-email\/([^\s"<>]+)/);
-        if (link?.[1]) return link[1];
-      }
-    }
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  throw new Error(`No verification email arrived for ${email} within 7.5s`);
+async function devBypassLogin(req: APIRequestContext, email: string): Promise<void> {
+  // GET goes through Vite's same-origin proxy to the backend at
+  // /auth/oauth/dev/start; Set-Cookie response header lands the
+  // httpOnly refresh cookie on the browser context.
+  const res = await req.get(`/auth/oauth/dev/start?email=${encodeURIComponent(email)}`);
+  expect(res.status(), `dev-bypass returned ${res.status()} ${await res.text()}`).toBe(200);
 }
 
 test.describe("multi-tenant smoke", () => {
-  test("register → verify → create org+project → relogin", async ({ page, request }) => {
-    await clearMailhog(request);
-
+  test("dev-bypass → create org+project → relogin", async ({ page, request }) => {
     const email = uniqueEmail("smoke");
-    const password = "correct horse battery staple";
     const orgSlug = `s-${Date.now().toString(36)}`;
     const projectSlug = `p-${Date.now().toString(36)}`;
 
-    // ── Register ────────────────────────────────────────────────────────
-    await page.goto("/auth/register");
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: /create account|sign up|register/i }).click();
+    // ── Auth (dev-bypass) ───────────────────────────────────────────────
+    await devBypassLogin(page.request, email);
 
-    // The register page transitions to a "check your email" state OR the
-    // verify-email landing once consumed; we don't depend on the exact
-    // copy, just on having picked up the verification token.
-    const verifyToken = await fetchVerifyTokenFor(request, email);
-
-    await page.goto(`/auth/verify-email/${verifyToken}`);
-    // Wait for the verify mutation to settle — the page transitions from
-    // "Verifying…" to "Email verified" once the side effect commits. We
-    // *need* that commit before login; without it, /auth/login still
-    // 403s with auth.email_unverified.
-    await expect(page.getByRole("heading", { name: /email verified/i })).toBeVisible({
+    // First page load triggers a 401 on /orgs API call → recoverFrom401
+    // exchanges the refresh cookie for an access token, retries, listing
+    // renders empty-state.
+    await page.goto("/orgs");
+    await expect(page.getByRole("heading", { name: /welcome to fastsaas/i })).toBeVisible({
       timeout: 15_000,
     });
-
-    // ── Login ───────────────────────────────────────────────────────────
-    await page.goto("/auth/login");
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: /sign in/i }).click();
-
-    // Login SPA-navigates to /orgs; full `page.goto` would reload and
-    // drop the in-memory access token (ADR-008 hybrid storage). 15s
-    // generous timeout — CI runners are slower than local.
-    await page.waitForURL(/\/orgs\/?$/, { timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: /welcome to fastsaas/i })).toBeVisible();
 
     // ── Create org ──────────────────────────────────────────────────────
     await page
@@ -109,14 +58,13 @@ test.describe("multi-tenant smoke", () => {
     await page.getByLabel("Slug").fill(orgSlug);
     await page.getByRole("button", { name: /create organisation/i }).click();
 
-    await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}$`));
+    await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}$`), { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Acme Co" })).toBeVisible();
 
     // ── Create project ──────────────────────────────────────────────────
     await page.getByRole("link", { name: /open projects/i }).click();
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}/projects$`));
 
-    // Empty state has a "New project" button; click it to open the dialog.
     await page
       .getByRole("button", { name: /new project/i })
       .first()
@@ -131,23 +79,14 @@ test.describe("multi-tenant smoke", () => {
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}/projects/${projectSlug}$`));
     await expect(page.getByRole("heading", { name: "Q3 Forecast" })).toBeVisible();
 
-    // ── Log out + log back in ───────────────────────────────────────────
-    // No dedicated logout button on the placeholder shell yet; clear the
-    // in-memory access token by reloading the SPA after evicting it from
-    // the Zustand store via the public hook surface, then sign in again.
-    await page.evaluate(() => {
-      // The store hook's `clear()` is the canonical way to drop the access
-      // token; localStorage holds only the org-pin slug, never the token.
-      // biome-ignore lint/suspicious/noExplicitAny: page-context type lift
-      (window as any).__authStore?.getState?.().clear?.();
-    });
+    // ── Re-login ────────────────────────────────────────────────────────
+    // Drop the refresh cookie + reload. Then dev-bypass again under the
+    // same email — the actor already exists, so this exercises the
+    // "second sign-in for an existing actor" path, not the registration
+    // path. We confirm we land back on /orgs with the org we just made.
     await page.context().clearCookies();
-    await page.goto("/auth/login");
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: /sign in/i }).click();
-
-    await page.waitForURL(/\/orgs\/?$/, { timeout: 15_000 });
-    await expect(page.getByRole("link", { name: "Acme Co" })).toBeVisible();
+    await devBypassLogin(page.request, email);
+    await page.goto("/orgs");
+    await expect(page.getByRole("link", { name: "Acme Co" })).toBeVisible({ timeout: 15_000 });
   });
 });
