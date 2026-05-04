@@ -32,7 +32,7 @@ async function devBypassLogin(req: APIRequestContext, email: string): Promise<vo
 }
 
 test.describe("multi-tenant smoke", () => {
-  test("dev-bypass → create org+project → relogin", async ({ page, request }) => {
+  test("dev-bypass → create org+project → relogin", async ({ page }) => {
     const email = uniqueEmail("smoke");
     const orgSlug = `s-${Date.now().toString(36)}`;
     const projectSlug = `p-${Date.now().toString(36)}`;
