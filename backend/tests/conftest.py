@@ -110,9 +110,12 @@ async def clean_identity() -> AsyncIterator[None]:
     eng = create_async_engine(settings.database_url_migrator, future=True)
     factory = async_sessionmaker(bind=eng, expire_on_commit=False, class_=AsyncSession)
     # Cascading FKs (ON DELETE CASCADE on users/oauth_identities/magic_link_tokens)
-    # take care of the children when we wipe `actors`.
+    # take care of the children when we wipe `actors`. `audit_log.actor_id`
+    # has no cascade — it FKs `actors(id)` per ADR-006/ADR-010 immortality —
+    # so wipe the audit rows first or the FK blocks the actors delete.
     async def wipe() -> None:
         async with factory() as s, s.begin():
+            await s.execute(text("DELETE FROM audit_log"))
             await s.execute(text("DELETE FROM actors"))
 
     try:

@@ -69,6 +69,7 @@ async def wipe_state() -> AsyncIterator[None]:
 
     async def wipe() -> None:
         async with factory() as s, s.begin():
+            await s.execute(text("DELETE FROM audit_log"))
             await s.execute(text("DELETE FROM capabilities"))
             await s.execute(text("DELETE FROM projects"))
             await s.execute(text("DELETE FROM organisation_members"))

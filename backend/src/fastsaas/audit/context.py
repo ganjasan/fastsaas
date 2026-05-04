@@ -17,6 +17,8 @@ job context — that contract is documented in ADR-010 §"Actor + intent flow".
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
@@ -42,3 +44,21 @@ class IntentContext:
 
 actor_var: ContextVar[CurrentActor | None] = ContextVar("audit.actor", default=None)
 intent_var: ContextVar[IntentContext | None] = ContextVar("audit.intent", default=None)
+
+
+@contextmanager
+def set_audit_context(
+    actor: CurrentActor, *, intent: IntentContext | None = None
+) -> Iterator[None]:
+    """Manually pin actor + intent for the current task — for tests, scripts,
+    and worker harnesses. HTTP requests get this for free via
+    `AuditContextMiddleware`. The default `intent` is a synthetic
+    `req:test` placeholder so tests don't have to construct one when they
+    don't care about the source-prefix detail."""
+    atok = actor_var.set(actor)
+    itok = intent_var.set(intent or IntentContext(intent_hash="req:test"))
+    try:
+        yield
+    finally:
+        actor_var.reset(atok)
+        intent_var.reset(itok)

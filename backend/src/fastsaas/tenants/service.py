@@ -15,11 +15,13 @@ from __future__ import annotations
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 
+from fastsaas import audit
 from fastsaas.authz.bundles import BUNDLES, Scope
 from fastsaas.authz.models import Capability
 from fastsaas.authz.service import mint_bundle, mint_capability, revoke_bundle
@@ -100,6 +102,23 @@ class OrganisationService:
 
                 await db.flush()
                 await db.refresh(org)
+
+                await audit.record(
+                    db,
+                    action="create",
+                    entity_type="organisation",
+                    entity_id=org.id,
+                    diff={
+                        "before": {},
+                        "after": {
+                            "id": str(org.id),
+                            "name": org.name,
+                            "slug": org.slug,
+                        },
+                    },
+                    organisation_id=org.id,
+                    extra_intent_metadata={"org_id": str(org.id)},
+                )
                 return org
         except IntegrityError as e:
             raise OrgSlugTakenError(slug) from e
@@ -169,6 +188,19 @@ class OrganisationService:
                         ).bindparams(rb=str(actor_id), ra=now.isoformat())
                     ),
                 )
+            )
+
+            await audit.record(
+                db,
+                action="delete",
+                entity_type="organisation",
+                entity_id=org.id,
+                diff={
+                    "before": {"deleted_at": None},
+                    "after": {"deleted_at": now.isoformat()},
+                },
+                organisation_id=org.id,
+                extra_intent_metadata={"org_id": str(org.id)},
             )
 
     @staticmethod
@@ -279,6 +311,26 @@ class MembershipService:
             db.add(inv)
             await db.flush()
             await db.refresh(inv)
+
+            await audit.record(
+                db,
+                action="create",
+                entity_type="org_invitation",
+                entity_id=inv.id,
+                diff={
+                    "before": {},
+                    "after": {
+                        "id": str(inv.id),
+                        "organisation_id": str(inv.organisation_id),
+                        "email": inv.email,
+                        "role": inv.role,
+                        "expires_at": inv.expires_at.isoformat(),
+                        "invited_by": str(inv.invited_by),
+                    },
+                },
+                organisation_id=org_id,
+                extra_intent_metadata={"org_id": str(org_id)},
+            )
             return raw, inv
 
     @staticmethod
@@ -373,6 +425,38 @@ class MembershipService:
                 project_ids=project_ids,
                 db=db,
             )
+
+            await audit.record(
+                db,
+                action="update",
+                entity_type="org_invitation",
+                entity_id=inv.id,
+                diff={
+                    "before": {"consumed_at": None},
+                    "after": {
+                        "consumed_at": now.isoformat(),
+                        "consumed_by": str(accepting_actor_id),
+                    },
+                },
+                organisation_id=org.id,
+                extra_intent_metadata={"org_id": str(org.id)},
+            )
+            await audit.record(
+                db,
+                action="create",
+                entity_type="member",
+                entity_id=accepting_actor_id,
+                diff={
+                    "before": {},
+                    "after": {
+                        "organisation_id": str(org.id),
+                        "actor_id": str(accepting_actor_id),
+                        "role": role.value,
+                    },
+                },
+                organisation_id=org.id,
+                extra_intent_metadata={"org_id": str(org.id)},
+            )
             return org, role
 
     # ── Role change / removal ───────────────────────────────────────────────
@@ -437,6 +521,19 @@ class MembershipService:
             member.role = new_role
             db.add(member)
 
+            await audit.record(
+                db,
+                action="update",
+                entity_type="member",
+                entity_id=target_actor_id,
+                diff={
+                    "before": {"role": old_role.value},
+                    "after": {"role": new_role.value},
+                },
+                organisation_id=org_id,
+                extra_intent_metadata={"org_id": str(org_id)},
+            )
+
     @staticmethod
     async def remove(
         *, org_id: UUID, target_actor_id: UUID, actor_id: UUID
@@ -451,6 +548,8 @@ class MembershipService:
 
             if OrganisationRole(member.role) is OrganisationRole.OWNER:
                 await _assert_not_last_owner(db, org_id=org_id)
+
+            removed_role = member.role
 
             await db.delete(member)
 
@@ -469,6 +568,23 @@ class MembershipService:
                         ).bindparams(rb=str(actor_id), ra=now.isoformat())
                     ),
                 )
+            )
+
+            await audit.record(
+                db,
+                action="delete",
+                entity_type="member",
+                entity_id=target_actor_id,
+                diff={
+                    "before": {
+                        "organisation_id": str(org_id),
+                        "actor_id": str(target_actor_id),
+                        "role": removed_role,
+                    },
+                    "after": {},
+                },
+                organisation_id=org_id,
+                extra_intent_metadata={"org_id": str(org_id)},
             )
 
     # ── Reads ───────────────────────────────────────────────────────────────
@@ -629,6 +745,29 @@ class ProjectService:
                         )
 
                 await db.refresh(project)
+
+                await audit.record(
+                    db,
+                    action="create",
+                    entity_type="project",
+                    entity_id=project.id,
+                    diff={
+                        "before": {},
+                        "after": {
+                            "id": str(project.id),
+                            "organisation_id": str(project.organisation_id),
+                            "name": project.name,
+                            "slug": project.slug,
+                            "description": project.description,
+                            "created_by": str(project.created_by),
+                        },
+                    },
+                    organisation_id=org_id,
+                    extra_intent_metadata={
+                        "org_id": str(org_id),
+                        "project_id": str(project.id),
+                    },
+                )
                 return project
         except IntegrityError as e:
             raise ProjectSlugTakenError(slug) from e
@@ -667,13 +806,32 @@ class ProjectService:
             project = await db.get(Project, project_id)
             if project is None or project.deleted_at is not None:
                 raise ProjectNotFoundError(str(project_id))
-            if name is not None:
+            before_diff: dict[str, Any] = {}
+            after_diff: dict[str, Any] = {}
+            if name is not None and name != project.name:
+                before_diff["name"] = project.name
+                after_diff["name"] = name
                 project.name = name
-            if description is not None:
+            if description is not None and description != project.description:
+                before_diff["description"] = project.description
+                after_diff["description"] = description
                 project.description = description
             db.add(project)
             await db.flush()
             await db.refresh(project)
+            if before_diff:
+                await audit.record(
+                    db,
+                    action="update",
+                    entity_type="project",
+                    entity_id=project.id,
+                    diff={"before": before_diff, "after": after_diff},
+                    organisation_id=project.organisation_id,
+                    extra_intent_metadata={
+                        "org_id": str(project.organisation_id),
+                        "project_id": str(project.id),
+                    },
+                )
             return project
 
     @staticmethod
@@ -688,11 +846,24 @@ class ProjectService:
                 raise ProjectNotFoundError(str(project_id))
             project.deleted_at = now
             db.add(project)
-            # NB: actor_id intentionally unused here — soft-delete leaves a
-            # trail in the soon-to-be audit_log middleware (#4), not on
-            # Project itself. Keeping the parameter on the signature so
-            # the audit hook can grow without changing call sites.
-            _ = actor_id
+            await db.flush()
+
+            await audit.record(
+                db,
+                action="delete",
+                entity_type="project",
+                entity_id=project.id,
+                diff={
+                    "before": {"deleted_at": None},
+                    "after": {"deleted_at": now.isoformat()},
+                },
+                organisation_id=project.organisation_id,
+                extra_intent_metadata={
+                    "org_id": str(project.organisation_id),
+                    "project_id": str(project.id),
+                    "deleted_by": str(actor_id),
+                },
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -748,6 +919,29 @@ class ProjectShareService:
             db.add(row)
             await db.flush()
             await db.refresh(row)
+
+            await audit.record(
+                db,
+                action="create",
+                entity_type="share",
+                entity_id=row.id,
+                diff={
+                    "before": {},
+                    "after": {
+                        "id": str(row.id),
+                        "project_id": str(row.project_id),
+                        "organisation_id": str(row.organisation_id),
+                        "email": row.email,
+                        "shared_by": str(row.shared_by),
+                        "expires_at": row.expires_at.isoformat(),
+                    },
+                },
+                organisation_id=row.organisation_id,
+                extra_intent_metadata={
+                    "org_id": str(row.organisation_id),
+                    "project_id": str(row.project_id),
+                },
+            )
             return raw, row
 
     @staticmethod
@@ -798,6 +992,25 @@ class ProjectShareService:
             if existing_membership is not None:
                 # Member already has access through their org bundle.
                 # Token is consumed (above), capability not minted.
+                await audit.record(
+                    db,
+                    action="update",
+                    entity_type="share",
+                    entity_id=share.id,
+                    diff={
+                        "before": {"consumed_at": None},
+                        "after": {
+                            "consumed_at": now.isoformat(),
+                            "consumed_by": str(accepting_actor_id),
+                        },
+                    },
+                    organisation_id=org.id,
+                    extra_intent_metadata={
+                        "org_id": str(org.id),
+                        "project_id": str(project.id),
+                        "skipped_capability_mint": "already_member",
+                    },
+                )
                 return org, project
 
             cap = await mint_capability(
@@ -819,6 +1032,53 @@ class ProjectShareService:
             share.consumed_capability_id = cap.id
             db.add(share)
             await db.flush()
+
+            await audit.record(
+                db,
+                action="update",
+                entity_type="share",
+                entity_id=share.id,
+                diff={
+                    "before": {"consumed_at": None},
+                    "after": {
+                        "consumed_at": now.isoformat(),
+                        "consumed_by": str(accepting_actor_id),
+                        "consumed_capability_id": str(cap.id),
+                    },
+                },
+                organisation_id=org.id,
+                extra_intent_metadata={
+                    "org_id": str(org.id),
+                    "project_id": str(project.id),
+                },
+            )
+            await audit.record(
+                db,
+                action="create",
+                entity_type="capability",
+                entity_id=cap.id,
+                diff={
+                    "before": {},
+                    "after": {
+                        "id": str(cap.id),
+                        "actor_id": str(cap.actor_id),
+                        "operation": cap.operation,
+                        "resource_type": cap.resource_type,
+                        "resource_id": str(cap.resource_id) if cap.resource_id else None,
+                        "bundle_name": cap.bundle_name,
+                        "granted_by": str(cap.granted_by),
+                        "expires_at": (
+                            cap.expires_at.isoformat() if cap.expires_at else None
+                        ),
+                    },
+                },
+                organisation_id=org.id,
+                extra_intent_metadata={
+                    "org_id": str(org.id),
+                    "project_id": str(project.id),
+                    "share_id": str(share.id),
+                },
+            )
             return org, project
 
     @staticmethod
@@ -868,6 +1128,26 @@ class ProjectShareService:
                 share.consumed_by = revoked_by
                 db.add(share)
                 await db.flush()
+                await audit.record(
+                    db,
+                    action="delete",
+                    entity_type="share",
+                    entity_id=share.id,
+                    diff={
+                        "before": {"consumed_at": None},
+                        "after": {
+                            "consumed_at": now.isoformat(),
+                            "consumed_by": str(revoked_by),
+                        },
+                    },
+                    organisation_id=share.organisation_id,
+                    extra_intent_metadata={
+                        "org_id": str(share.organisation_id),
+                        "project_id": str(share.project_id),
+                        "revoked_by": str(revoked_by),
+                        "revoke_reason": "pending_share_revoked",
+                    },
+                )
                 return
 
             # Already consumed — revoke the resulting capability if still active.
@@ -887,4 +1167,40 @@ class ProjectShareService:
                         ).bindparams(rb=str(revoked_by), ra=now.isoformat())
                     ),
                 )
+            )
+
+            await audit.record(
+                db,
+                action="delete",
+                entity_type="share",
+                entity_id=share.id,
+                diff={
+                    "before": {"consumed_capability_id": str(share.consumed_capability_id)},
+                    "after": {"revoked_at": now.isoformat()},
+                },
+                organisation_id=share.organisation_id,
+                extra_intent_metadata={
+                    "org_id": str(share.organisation_id),
+                    "project_id": str(share.project_id),
+                    "revoked_by": str(revoked_by),
+                },
+            )
+            await audit.record(
+                db,
+                action="update",
+                entity_type="capability",
+                entity_id=share.consumed_capability_id,
+                diff={
+                    "before": {"revoked_at": None},
+                    "after": {
+                        "revoked_at": now.isoformat(),
+                        "revoked_by": str(revoked_by),
+                    },
+                },
+                organisation_id=share.organisation_id,
+                extra_intent_metadata={
+                    "org_id": str(share.organisation_id),
+                    "project_id": str(share.project_id),
+                    "share_id": str(share.id),
+                },
             )

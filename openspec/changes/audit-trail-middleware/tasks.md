@@ -19,19 +19,19 @@ linked_issue: ganjasan/fastsaas#4
 
 ## 2. Service-layer integration (core)
 
-- [ ] 2.1 `OrganisationService.create` → `record("create", "organisation", ...)`
-- [ ] 2.2 `OrganisationService.soft_delete` → `record("delete", "organisation", ...)`
-- [ ] 2.3 `MembershipService.invite` → `record("create", "org_invitation", ...)`
-- [ ] 2.4 `MembershipService.accept` → `record("create", "member", ...)` + `record("update", "org_invitation", ...)` for the consumed token
-- [ ] 2.5 `MembershipService.change_role` → `record("update", "member", ...)` with `diff` showing `role` transition
-- [ ] 2.6 `MembershipService.remove` → `record("delete", "member", ...)`
-- [ ] 2.7 `ProjectService.create` → `record("create", "project", ...)` (single row even though capability fan-out happens too)
-- [ ] 2.8 `ProjectService.update` → `record("update", "project", ...)`
-- [ ] 2.9 `ProjectService.soft_delete` → `record("delete", "project", ...)`
-- [ ] 2.10 `ProjectShareService.share` → `record("create", "share", ...)`
-- [ ] 2.11 `ProjectShareService.accept` → `record("update", "share", ...)` + `record("create", "capability", ...)` for the minted guest cap
-- [ ] 2.12 `ProjectShareService.revoke` → `record("delete", "share", ...)` + `record("update", "capability", ...)` if a consumed-cap was soft-revoked
-- [ ] 2.13 `authz.service.mint_bundle` / `mint_capability` / `revoke_bundle` / `revoke_capability` — emit `record(..., "capability", ...)` with action and bundle_name in metadata
+- [x] 2.1 `OrganisationService.create` → `record("create", "organisation", ...)`
+- [x] 2.2 `OrganisationService.soft_delete` → `record("delete", "organisation", ...)`
+- [x] 2.3 `MembershipService.invite` → `record("create", "org_invitation", ...)`
+- [x] 2.4 `MembershipService.accept` → `record("create", "member", ...)` + `record("update", "org_invitation", ...)` for the consumed token
+- [x] 2.5 `MembershipService.change_role` → `record("update", "member", ...)` with `diff` showing `role` transition
+- [x] 2.6 `MembershipService.remove` → `record("delete", "member", ...)`
+- [x] 2.7 `ProjectService.create` → `record("create", "project", ...)` (single row even though capability fan-out happens too)
+- [x] 2.8 `ProjectService.update` → `record("update", "project", ...)`
+- [x] 2.9 `ProjectService.soft_delete` → `record("delete", "project", ...)`
+- [x] 2.10 `ProjectShareService.share` → `record("create", "share", ...)`
+- [x] 2.11 `ProjectShareService.accept` → `record("update", "share", ...)` + `record("create", "capability", ...)` for the minted guest cap
+- [x] 2.12 `ProjectShareService.revoke` → `record("delete", "share", ...)` + `record("update", "capability", ...)` if a consumed-cap was soft-revoked
+- [x] 2.13 `authz.service.mint_bundle` / `mint_capability` / `revoke_bundle` / `revoke_capability` — emit `record(..., "capability", ...)` with action and bundle_name in metadata. Bootstrap/migration callers (no contextvar) silently skip per `_audit_context_present()` so non-request grants don't crash.
 
 ## 3. Wiegers documentation
 

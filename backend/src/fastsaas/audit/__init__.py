@@ -11,7 +11,12 @@ Public surface:
 - `AuditLog` — SQLModel mirror of `audit_log` for read paths.
 """
 
-from fastsaas.audit.context import IntentContext, actor_var, intent_var
+from fastsaas.audit.context import (
+    IntentContext,
+    actor_var,
+    intent_var,
+    set_audit_context,
+)
 from fastsaas.audit.middleware import AuditContextMiddleware
 from fastsaas.audit.mixin import AuditedModel
 from fastsaas.audit.models import AuditLog
@@ -37,4 +42,5 @@ __all__ = [
     "intent_var",
     "record",
     "redact",
+    "set_audit_context",
 ]
