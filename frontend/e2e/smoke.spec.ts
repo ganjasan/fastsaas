@@ -24,6 +24,18 @@ async function clearMailhog(req: APIRequestContext): Promise<void> {
   await req.delete(`${MAILHOG_HTTP_URL}/api/v1/messages`);
 }
 
+/**
+ * Decode a quoted-printable body. Mailhog returns the email body as QP
+ * (RFC 2045): soft-break `=\r?\n` joins long lines and `=XX` is a hex
+ * byte. Without decoding, the verification URL gets chopped at the
+ * 76-char wrap and the token comes out truncated.
+ */
+function quopriDecode(body: string): string {
+  return body
+    .replace(/=\r?\n/g, "")
+    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+}
+
 async function fetchVerifyTokenFor(req: APIRequestContext, email: string): Promise<string> {
   // Poll Mailhog briefly — SMTP delivery is sub-second but BackgroundTasks
   // mean the response can return before the mail lands.
@@ -36,7 +48,7 @@ async function fetchVerifyTokenFor(req: APIRequestContext, email: string): Promi
           m.Content.Headers.To?.[0]?.toLowerCase() === email.toLowerCase(),
       );
       if (message) {
-        const decoded = Buffer.from(message.Content.Body as string, "binary").toString("utf8");
+        const decoded = quopriDecode(message.Content.Body as string);
         const link = decoded.match(/https?:\/\/[^\s"<>]+\/auth\/verify-email\/([^\s"<>]+)/);
         if (link?.[1]) return link[1];
       }
