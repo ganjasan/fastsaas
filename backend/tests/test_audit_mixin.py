@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlmodel import Field
+from sqlmodel import Field, SQLModel
 
 from fastsaas.audit.context import set_audit_context
 from fastsaas.audit.mixin import AuditedModel
@@ -86,33 +86,23 @@ class _AuditTestSkipped(AuditedModel, table=True):
 async def _ensure_test_tables() -> AsyncIterator[None]:
     """Create the test-only tables once and drop after the module finishes.
 
-    `_ensure_actor_for_audit_fk` (below) keeps the `actors` row alive for
-    every test in this module since `audit_log.actor_id` FKs `actors(id)`.
+    Uses `SQLModel.metadata.create_all` against the SQLAlchemy `__table__`
+    descriptors so the column definitions on `_AuditTestWidget` /
+    `_AuditTestSkipped` are the single source of truth — adding a column
+    on the model picks up automatically.
     """
     settings = get_settings()
     eng = create_async_engine(settings.database_url_migrator, future=True)
-    factory = async_sessionmaker(bind=eng, expire_on_commit=False, class_=AsyncSession)
-    async with factory() as s, s.begin():
-        await s.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS audit_test_widget ("
-                "id UUID PRIMARY KEY DEFAULT gen_random_uuid(),"
-                "name TEXT NOT NULL,"
-                "raw_secret TEXT NOT NULL,"
-                "deleted_at TIMESTAMPTZ NULL)"
-            )
-        )
-        await s.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS audit_test_skipped ("
-                "id UUID PRIMARY KEY DEFAULT gen_random_uuid(),"
-                "name TEXT NOT NULL)"
-            )
+    tables = [_AuditTestWidget.__table__, _AuditTestSkipped.__table__]
+    async with eng.begin() as conn:
+        await conn.run_sync(
+            lambda sync_conn: SQLModel.metadata.create_all(sync_conn, tables=tables)
         )
     yield
-    async with factory() as s, s.begin():
-        await s.execute(text("DROP TABLE IF EXISTS audit_test_widget"))
-        await s.execute(text("DROP TABLE IF EXISTS audit_test_skipped"))
+    async with eng.begin() as conn:
+        await conn.run_sync(
+            lambda sync_conn: SQLModel.metadata.drop_all(sync_conn, tables=tables)
+        )
     await eng.dispose()
 
 

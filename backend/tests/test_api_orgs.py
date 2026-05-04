@@ -16,15 +16,8 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
 
 from fastsaas import db as db_module
-from fastsaas.config import get_settings
 
 
 def _email() -> str:
@@ -53,35 +46,6 @@ async def _reset_migrator_engine(monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
         await db_module._migrator_engine.dispose()
     monkeypatch.setattr(db_module, "_migrator_engine", None, raising=False)
     monkeypatch.setattr(db_module, "_migrator_session_factory", None, raising=False)
-
-
-@pytest.fixture
-async def wipe_state() -> AsyncIterator[None]:
-    """Wipe tenant + identity rows before AND after each test.
-
-    Order matters — capabilities reference actors and orgs, so wipe in
-    dependency order (capabilities, projects, members, orgs, then actors;
-    magic_link_tokens cascade with actors).
-    """
-    settings = get_settings()
-    eng = create_async_engine(settings.database_url_migrator, future=True)
-    factory = async_sessionmaker(bind=eng, expire_on_commit=False, class_=AsyncSession)
-
-    async def wipe() -> None:
-        async with factory() as s, s.begin():
-            await s.execute(text("DELETE FROM audit_log"))
-            await s.execute(text("DELETE FROM capabilities"))
-            await s.execute(text("DELETE FROM projects"))
-            await s.execute(text("DELETE FROM organisation_members"))
-            await s.execute(text("DELETE FROM organisations"))
-            await s.execute(text("DELETE FROM actors"))
-
-    try:
-        await wipe()
-        yield
-        await wipe()
-    finally:
-        await eng.dispose()
 
 
 async def _register_and_login(

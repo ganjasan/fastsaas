@@ -13,8 +13,7 @@ Public surface:
 
 from fastsaas.audit.context import (
     IntentContext,
-    actor_var,
-    intent_var,
+    context_present,
     set_audit_context,
 )
 from fastsaas.audit.middleware import AuditContextMiddleware
@@ -38,8 +37,7 @@ __all__ = [
     "IntentContext",
     "MissingActorError",
     "MissingIntentError",
-    "actor_var",
-    "intent_var",
+    "context_present",
     "record",
     "redact",
     "set_audit_context",

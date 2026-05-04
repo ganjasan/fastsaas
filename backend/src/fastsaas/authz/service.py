@@ -20,7 +20,6 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastsaas import audit
-from fastsaas.audit.context import actor_var, intent_var
 from fastsaas.authz.bundles import BUNDLES, CapabilityTemplate, Scope
 from fastsaas.authz.models import Capability
 
@@ -86,20 +85,16 @@ async def mint_bundle(
     # what, scoped to which resource". One bundle mint typically fans out
     # to a handful of caps; the rows are cheap and the granularity matches
     # how reads filter (`WHERE entity_type='capability' AND ...`).
-    if _audit_context_present():
+    if audit.context_present():
         for cap in created:
             await audit.record(
                 db,
                 action="create",
                 entity_type="capability",
                 entity_id=cap.id,
-                diff={
-                    "before": {},
-                    "after": _cap_after(cap),
-                },
+                diff={"before": {}, "after": _cap_after(cap)},
                 organisation_id=org_id,
-                extra_intent_metadata={
-                    "org_id": str(org_id),
+                intent_metadata={
                     "bundle_name": bundle_name,
                     "target_actor_id": str(actor_id),
                 },
@@ -130,7 +125,7 @@ async def revoke_bundle(
     )
     revoked_ids = [row for row in (await db.execute(stmt)).scalars().all()]
 
-    if revoked_ids and _audit_context_present():
+    if revoked_ids and audit.context_present():
         for cap_id in revoked_ids:
             await audit.record(
                 db,
@@ -145,8 +140,7 @@ async def revoke_bundle(
                     },
                 },
                 organisation_id=org_id,
-                extra_intent_metadata={
-                    "org_id": str(org_id),
+                intent_metadata={
                     "bundle_name": bundle_name,
                     "target_actor_id": str(actor_id),
                     "revoked_by": str(revoked_by),
@@ -194,7 +188,7 @@ async def mint_capability(
     db.add(cap)
     await db.flush()
 
-    if _audit_context_present():
+    if audit.context_present():
         await audit.record(
             db,
             action="create",
@@ -202,8 +196,7 @@ async def mint_capability(
             entity_id=cap.id,
             diff={"before": {}, "after": _cap_after(cap)},
             organisation_id=org_id,
-            extra_intent_metadata={
-                "org_id": str(org_id) if org_id else None,
+            intent_metadata={
                 "bundle_name": bundle_name,
                 "target_actor_id": str(actor_id),
             },
@@ -229,7 +222,7 @@ async def revoke_capability(
     if not rows:
         return 0
 
-    if _audit_context_present():
+    if audit.context_present():
         cap_id, meta = rows[0]
         org_id_str = meta.get("org_id") if isinstance(meta, dict) else None
         await audit.record(
@@ -245,25 +238,9 @@ async def revoke_capability(
                 },
             },
             organisation_id=UUID(org_id_str) if org_id_str else None,
-            extra_intent_metadata={
-                "revoked_by": str(revoked_by),
-                **({"org_id": org_id_str} if org_id_str else {}),
-            },
+            intent_metadata={"revoked_by": str(revoked_by)},
         )
     return len(rows)
-
-
-def _audit_context_present() -> bool:
-    """Audit-context preflight for grant/revoke calls.
-
-    Migrations and bootstrap-time grant work happens outside any HTTP request,
-    so `actor_var` / `intent_var` aren't set. We treat that as "not auditable
-    by this path" rather than raising — the call is the consequence of a
-    parent intent (e.g. an alembic migration) that the caller is responsible
-    for tracing through other means. Inside a real request both contextvars
-    are populated, so the check fires uniformly.
-    """
-    return actor_var.get() is not None and intent_var.get() is not None
 
 
 def _cap_after(cap: Capability) -> dict[str, Any]:

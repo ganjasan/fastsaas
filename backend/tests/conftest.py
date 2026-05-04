@@ -97,33 +97,60 @@ async def client() -> AsyncIterator[AsyncClient]:
     await db.close_engine()
 
 
-@pytest.fixture
-async def clean_identity() -> AsyncIterator[None]:
-    """Delete identity rows before AND after each integration test.
+# FK dependency order — children first, then parents. `audit_log.actor_id`
+# FKs `actors(id)` without cascade per ADR-006 / ADR-010 (immortal log), so
+# audit rows must be wiped before `actors`. The other tables follow the
+# tenant FK chain: shares → invitations → caps → projects → members → orgs.
+_WIPE_ORDER: tuple[str, ...] = (
+    "audit_log",
+    "project_shares",
+    "org_invitations",
+    "capabilities",
+    "projects",
+    "organisation_members",
+    "organisations",
+    "actors",
+)
 
-    Integration tests hit real endpoints which commit to the live DB; without
-    a wipe the next test sees yesterday's actors/users/tokens. Connects as the
-    migrator role (BYPASSRLS, owns the schema, has TRUNCATE) — `app_user`
-    intentionally lacks TRUNCATE privilege.
-    """
+
+async def _wipe_tables(tables: tuple[str, ...]) -> None:
     settings = get_settings()
     eng = create_async_engine(settings.database_url_migrator, future=True)
     factory = async_sessionmaker(bind=eng, expire_on_commit=False, class_=AsyncSession)
-    # Cascading FKs (ON DELETE CASCADE on users/oauth_identities/magic_link_tokens)
-    # take care of the children when we wipe `actors`. `audit_log.actor_id`
-    # has no cascade — it FKs `actors(id)` per ADR-006/ADR-010 immortality —
-    # so wipe the audit rows first or the FK blocks the actors delete.
-    async def wipe() -> None:
-        async with factory() as s, s.begin():
-            await s.execute(text("DELETE FROM audit_log"))
-            await s.execute(text("DELETE FROM actors"))
-
     try:
-        await wipe()
-        yield
-        await wipe()
+        async with factory() as s, s.begin():
+            for tbl in tables:
+                await s.execute(text(f"DELETE FROM {tbl}"))
     finally:
         await eng.dispose()
+
+
+@pytest.fixture
+async def clean_identity() -> AsyncIterator[None]:
+    """Wipe `audit_log` + `actors` (cascading children) around each test.
+
+    Integration tests hit real endpoints that commit to the live DB; without
+    a wipe the next test sees yesterday's rows. Lighter than `wipe_state` —
+    use this for auth-only tests that never touch tenancy.
+    """
+    light = ("audit_log", "actors")
+    await _wipe_tables(light)
+    yield
+    await _wipe_tables(light)
+
+
+@pytest.fixture
+async def wipe_state() -> AsyncIterator[None]:
+    """Wipe every tenant + identity + audit table around each test.
+
+    Use this for tests that exercise routes touching orgs / members /
+    projects / shares / capabilities. The dependency order in `_WIPE_ORDER`
+    is the single source of truth — adding a new FK-bearing table is one
+    edit here, not seven across the suite.
+    """
+    await _wipe_tables(_WIPE_ORDER)
+    yield
+    await _wipe_tables(_WIPE_ORDER)
 
 
 @pytest.fixture

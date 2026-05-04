@@ -29,7 +29,7 @@ from sqlalchemy.orm import Mapper
 from sqlmodel import SQLModel
 
 from fastsaas.audit.context import actor_var, intent_var
-from fastsaas.audit.service import record_via_connection
+from fastsaas.audit.service import _record_via_connection
 
 _SOFT_DELETE_COL = "deleted_at"
 
@@ -110,9 +110,9 @@ def _maybe_emit(target: AuditedModel, connection: Any, *, action: str, diff: dic
 
     entity_id = _resolve_entity_id(target)
     if entity_id is None:
-        return  # composite-PK or non-UUID PK — caller must use record() explicitly
+        return
 
-    record_via_connection(
+    _record_via_connection(
         connection,
         action=action,  # type: ignore[arg-type]
         entity_type=_resolve_entity_type(target),

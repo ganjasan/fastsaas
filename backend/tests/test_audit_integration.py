@@ -58,31 +58,6 @@ async def _reset_migrator_engine(monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
 
 
 @pytest.fixture
-async def wipe_state() -> AsyncIterator[None]:
-    settings = get_settings()
-    eng = create_async_engine(settings.database_url_migrator, future=True)
-    factory = async_sessionmaker(bind=eng, expire_on_commit=False, class_=AsyncSession)
-
-    async def wipe() -> None:
-        async with factory() as s, s.begin():
-            await s.execute(text("DELETE FROM audit_log"))
-            await s.execute(text("DELETE FROM project_shares"))
-            await s.execute(text("DELETE FROM org_invitations"))
-            await s.execute(text("DELETE FROM capabilities"))
-            await s.execute(text("DELETE FROM projects"))
-            await s.execute(text("DELETE FROM organisation_members"))
-            await s.execute(text("DELETE FROM organisations"))
-            await s.execute(text("DELETE FROM actors"))
-
-    try:
-        await wipe()
-        yield
-        await wipe()
-    finally:
-        await eng.dispose()
-
-
-@pytest.fixture
 async def migrator_session() -> AsyncIterator[AsyncSession]:
     """A bypass-RLS migrator session for direct audit_log peek."""
     settings = get_settings()

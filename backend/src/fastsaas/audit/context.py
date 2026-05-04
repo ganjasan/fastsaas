@@ -62,3 +62,13 @@ def set_audit_context(
     finally:
         actor_var.reset(atok)
         intent_var.reset(itok)
+
+
+def context_present() -> bool:
+    """True when both audit contextvars are set in the current task.
+
+    Service primitives that can be called both inside a request and from
+    bootstrap / migration code use this as a guard so non-request callers
+    skip audit silently rather than raising on a missing actor.
+    """
+    return actor_var.get() is not None and intent_var.get() is not None

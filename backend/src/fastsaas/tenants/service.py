@@ -117,7 +117,6 @@ class OrganisationService:
                         },
                     },
                     organisation_id=org.id,
-                    extra_intent_metadata={"org_id": str(org.id)},
                 )
                 return org
         except IntegrityError as e:
@@ -200,7 +199,6 @@ class OrganisationService:
                     "after": {"deleted_at": now.isoformat()},
                 },
                 organisation_id=org.id,
-                extra_intent_metadata={"org_id": str(org.id)},
             )
 
     @staticmethod
@@ -329,7 +327,6 @@ class MembershipService:
                     },
                 },
                 organisation_id=org_id,
-                extra_intent_metadata={"org_id": str(org_id)},
             )
             return raw, inv
 
@@ -439,7 +436,6 @@ class MembershipService:
                     },
                 },
                 organisation_id=org.id,
-                extra_intent_metadata={"org_id": str(org.id)},
             )
             await audit.record(
                 db,
@@ -455,7 +451,6 @@ class MembershipService:
                     },
                 },
                 organisation_id=org.id,
-                extra_intent_metadata={"org_id": str(org.id)},
             )
             return org, role
 
@@ -531,7 +526,6 @@ class MembershipService:
                     "after": {"role": new_role.value},
                 },
                 organisation_id=org_id,
-                extra_intent_metadata={"org_id": str(org_id)},
             )
 
     @staticmethod
@@ -584,7 +578,7 @@ class MembershipService:
                     "after": {},
                 },
                 organisation_id=org_id,
-                extra_intent_metadata={"org_id": str(org_id)},
+                intent_metadata={"removed_by": str(actor_id)},
             )
 
     # ── Reads ───────────────────────────────────────────────────────────────
@@ -763,8 +757,7 @@ class ProjectService:
                         },
                     },
                     organisation_id=org_id,
-                    extra_intent_metadata={
-                        "org_id": str(org_id),
+                    intent_metadata={
                         "project_id": str(project.id),
                     },
                 )
@@ -827,8 +820,7 @@ class ProjectService:
                     entity_id=project.id,
                     diff={"before": before_diff, "after": after_diff},
                     organisation_id=project.organisation_id,
-                    extra_intent_metadata={
-                        "org_id": str(project.organisation_id),
+                    intent_metadata={
                         "project_id": str(project.id),
                     },
                 )
@@ -858,8 +850,7 @@ class ProjectService:
                     "after": {"deleted_at": now.isoformat()},
                 },
                 organisation_id=project.organisation_id,
-                extra_intent_metadata={
-                    "org_id": str(project.organisation_id),
+                intent_metadata={
                     "project_id": str(project.id),
                     "deleted_by": str(actor_id),
                 },
@@ -937,8 +928,7 @@ class ProjectShareService:
                     },
                 },
                 organisation_id=row.organisation_id,
-                extra_intent_metadata={
-                    "org_id": str(row.organisation_id),
+                intent_metadata={
                     "project_id": str(row.project_id),
                 },
             )
@@ -990,8 +980,6 @@ class ProjectShareService:
                 OrganisationMember, (org.id, accepting_actor_id)
             )
             if existing_membership is not None:
-                # Member already has access through their org bundle.
-                # Token is consumed (above), capability not minted.
                 await audit.record(
                     db,
                     action="update",
@@ -1005,8 +993,7 @@ class ProjectShareService:
                         },
                     },
                     organisation_id=org.id,
-                    extra_intent_metadata={
-                        "org_id": str(org.id),
+                    intent_metadata={
                         "project_id": str(project.id),
                         "skipped_capability_mint": "already_member",
                     },
@@ -1047,8 +1034,7 @@ class ProjectShareService:
                     },
                 },
                 organisation_id=org.id,
-                extra_intent_metadata={
-                    "org_id": str(org.id),
+                intent_metadata={
                     "project_id": str(project.id),
                 },
             )
@@ -1073,8 +1059,7 @@ class ProjectShareService:
                     },
                 },
                 organisation_id=org.id,
-                extra_intent_metadata={
-                    "org_id": str(org.id),
+                intent_metadata={
                     "project_id": str(project.id),
                     "share_id": str(share.id),
                 },
@@ -1141,8 +1126,7 @@ class ProjectShareService:
                         },
                     },
                     organisation_id=share.organisation_id,
-                    extra_intent_metadata={
-                        "org_id": str(share.organisation_id),
+                    intent_metadata={
                         "project_id": str(share.project_id),
                         "revoked_by": str(revoked_by),
                         "revoke_reason": "pending_share_revoked",
@@ -1179,8 +1163,7 @@ class ProjectShareService:
                     "after": {"revoked_at": now.isoformat()},
                 },
                 organisation_id=share.organisation_id,
-                extra_intent_metadata={
-                    "org_id": str(share.organisation_id),
+                intent_metadata={
                     "project_id": str(share.project_id),
                     "revoked_by": str(revoked_by),
                 },
@@ -1198,8 +1181,7 @@ class ProjectShareService:
                     },
                 },
                 organisation_id=share.organisation_id,
-                extra_intent_metadata={
-                    "org_id": str(share.organisation_id),
+                intent_metadata={
                     "project_id": str(share.project_id),
                     "share_id": str(share.id),
                 },
