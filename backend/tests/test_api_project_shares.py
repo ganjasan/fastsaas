@@ -412,6 +412,131 @@ async def test_revoke_pending_share_invalidates_token(
     assert r.json()["detail"]["code"] == "share.not_found_or_expired"
 
 
+async def test_share_against_soft_deleted_project_404(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN a share was minted against a project that is then soft-deleted
+    WHEN the recipient accepts THEN 404 share.not_found_or_expired.
+
+    Exercises the `project_unavailable` branch of ProjectShareService.accept
+    that wasn't covered by the original phase-8 tests."""
+    pw = "correct horse battery staple"
+    owner = await _make_owner_with_two_projects(client, mailhog)
+    invitee_email = _email()
+    r = await client.post(
+        "/orgs/acme/projects/alpha/shares",
+        json={"email": invitee_email},
+        headers={"Authorization": f"Bearer {owner}"},
+    )
+    assert r.status_code == 201
+    share_token = _token_from_link(
+        _link_from_mail((await mailhog.get("/api/v2/messages")).json()["items"][0]["Content"]["Body"])
+    )
+    await mailhog.delete("/api/v1/messages")
+
+    # Owner soft-deletes the project before the recipient gets to it.
+    r = await client.delete(
+        "/orgs/acme/projects/alpha", headers={"Authorization": f"Bearer {owner}"}
+    )
+    assert r.status_code == 204
+
+    invitee_access = await _register_and_login(client, mailhog, invitee_email, pw)
+    r = await client.post(
+        "/orgs/projects/accept-share",
+        json={"token": share_token},
+        headers={"Authorization": f"Bearer {invitee_access}"},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "share.not_found_or_expired"
+
+
+async def test_share_for_existing_member_consumes_token_without_minting(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN an actor is already a member of the org WHEN a share for that
+    org's project is accepted by them THEN the token is consumed (single-
+    use contract) but no stray `role:guest_viewer` capability is minted —
+    they already have access through their member bundle, and a
+    guest_viewer row would never be reached by the cleanup paths."""
+    pw = "correct horse battery staple"
+    owner = await _make_owner_with_two_projects(client, mailhog)
+
+    # Add a member to the same org.
+    member_email = _email()
+    r = await client.post(
+        "/orgs/acme/members/invite",
+        json={"email": member_email, "role": "member"},
+        headers={"Authorization": f"Bearer {owner}"},
+    )
+    assert r.status_code == 201
+    invite_token = _token_from_link(
+        _link_from_mail((await mailhog.get("/api/v2/messages")).json()["items"][0]["Content"]["Body"])
+    )
+    await mailhog.delete("/api/v1/messages")
+    member_access = await _register_and_login(client, mailhog, member_email, pw)
+    r = await client.post(
+        "/orgs/members/accept",
+        json={"token": invite_token},
+        headers={"Authorization": f"Bearer {member_access}"},
+    )
+    assert r.status_code == 200
+
+    # Owner shares a project to the member's email.
+    r = await client.post(
+        "/orgs/acme/projects/alpha/shares",
+        json={"email": member_email},
+        headers={"Authorization": f"Bearer {owner}"},
+    )
+    assert r.status_code == 201
+    share_token = _token_from_link(
+        _link_from_mail((await mailhog.get("/api/v2/messages")).json()["items"][0]["Content"]["Body"])
+    )
+    await mailhog.delete("/api/v1/messages")
+
+    # Member accepts.
+    r = await client.post(
+        "/orgs/projects/accept-share",
+        json={"token": share_token},
+        headers={"Authorization": f"Bearer {member_access}"},
+    )
+    assert r.status_code == 200
+
+    # Confirm: NO `role:guest_viewer` capability was minted (only their
+    # member-bundle caps remain). And the share IS consumed (single-use).
+    # Direct DB peek through the migrator role; sha256 computed client-side
+    # to avoid relying on Postgres `digest()` / `pgcrypto` extension.
+    import hashlib
+
+    expected_hash = hashlib.sha256(share_token.encode("utf-8")).hexdigest()
+
+    settings = get_settings()
+    eng = create_async_engine(settings.database_url_migrator, future=True)
+    try:
+        async with eng.begin() as conn:
+            count = (
+                await conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM capabilities "
+                        "WHERE bundle_name = 'role:guest_viewer'"
+                    )
+                )
+            ).scalar_one()
+            assert count == 0, f"unexpected guest_viewer caps: {count}"
+
+            consumed = (
+                await conn.execute(
+                    text(
+                        "SELECT consumed_at IS NOT NULL FROM project_shares "
+                        "WHERE token_hash = :h"
+                    ),
+                    {"h": expected_hash},
+                )
+            ).scalar_one()
+            assert consumed is True
+    finally:
+        await eng.dispose()
+
+
 async def test_revoke_consumed_share_revokes_capability(
     client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
 ) -> None:

@@ -288,24 +288,29 @@ class MembershipService:
         """Consume the invitation, insert the membership row, and mint the
         target role bundle — all in one transaction.
 
-        The accepting actor must already exist (i.e. registered + verified
-        through the auth flow). The accepting actor's email is NOT required
-        to match the invitation's email: that constraint is enforced at
-        the route layer where we have the bearer token's identity.
+        Order matters: we look up the invite first, decide whether the
+        accepting actor is already a member, and only burn the token when
+        we'll actually do work. Re-acceptance by an existing member is a
+        no-op that returns the **existing** role and leaves the invite
+        unconsumed (so an admin can re-issue or use change_role explicitly
+        rather than getting a silently-burned token with the wrong role).
+
+        The accepting actor must already exist (registered + verified). The
+        actor's email is NOT required to match the invitation's email: that
+        constraint is enforced at the route layer where the bearer token
+        identifies the caller.
         """
         now = datetime.now(UTC)
         async with migrator_session_scope() as db:
-            stmt = (
-                update(OrgInvitation)
-                .where(
-                    OrgInvitation.token_hash == _hash_invite_token(raw_token),
-                    OrgInvitation.consumed_at.is_(None),
-                    OrgInvitation.expires_at > now,
+            inv = (
+                await db.execute(
+                    select(OrgInvitation).where(
+                        OrgInvitation.token_hash == _hash_invite_token(raw_token),
+                        OrgInvitation.consumed_at.is_(None),
+                        OrgInvitation.expires_at > now,
+                    )
                 )
-                .values(consumed_at=now, consumed_by=accepting_actor_id)
-                .returning(OrgInvitation)
-            )
-            inv = (await db.execute(stmt)).scalar_one_or_none()
+            ).scalar_one_or_none()
             if inv is None:
                 raise InviteNotFoundError("invite_not_found_or_expired")
 
@@ -313,14 +318,33 @@ class MembershipService:
             if org is None or org.deleted_at is not None:
                 raise InviteNotFoundError("org_unavailable")
 
-            # Already a member? Idempotent re-acceptance is allowed:
-            # we don't insert a duplicate, but we also don't re-mint
-            # capabilities — they already exist for the active bundle.
+            # Idempotent re-acceptance: actor is already a member of this
+            # org. Do not burn the token — admins can still see the
+            # invite as pending and either revoke it or use change_role
+            # to actually move the member. Return the **existing** role.
             existing_membership = await db.get(
                 OrganisationMember, (org.id, accepting_actor_id)
             )
             if existing_membership is not None:
                 return org, OrganisationRole(existing_membership.role)
+
+            # Atomic consume — guards against a concurrent accept of the
+            # same token between the SELECT above and this UPDATE. If
+            # someone else won, we surface InviteNotFoundError so the
+            # caller sees a clean 404.
+            consumed = (
+                await db.execute(
+                    update(OrgInvitation)
+                    .where(
+                        OrgInvitation.id == inv.id,
+                        OrgInvitation.consumed_at.is_(None),
+                    )
+                    .values(consumed_at=now, consumed_by=accepting_actor_id)
+                    .returning(OrgInvitation.id)
+                )
+            ).scalar_one_or_none()
+            if consumed is None:
+                raise InviteNotFoundError("invite_not_found_or_expired")
 
             role = OrganisationRole(inv.role)
             db.add(
@@ -730,16 +754,19 @@ class ProjectShareService:
     async def accept(
         *, raw_token: str, accepting_actor_id: UUID
     ) -> tuple[Organisation, Project]:
-        """Consume the share, mint exactly one `read:project` capability
-        scoped to the project, and link the capability id back to the
-        share row for audit. Idempotent only in the sense of "no double-
-        mint": once consumed, the same token cannot be used again.
+        """Consume the share and mint a `read:project` capability scoped
+        to the shared project, linking the capability id back onto the
+        share row for audit / revocation.
 
-        If the accepting actor is already a member of the share's org,
-        we still mint the resource-scoped capability for symmetry — the
-        member already had access via `all_in_org`, so the extra row is
-        a harmless duplicate that will be cleaned up by the next
-        revoke_bundle on the member.
+        The atomic UPDATE...RETURNING below also enforces single-use even
+        under concurrent accept attempts: at most one mint per token.
+
+        If the accepting actor is already a member of the share's org we
+        consume the token (single-use is part of the contract) but skip
+        the mint — a `role:guest_viewer` row would never be reached by
+        `revoke_bundle('role:member', ...)` cleanup, so it would linger
+        as a stray capability until expiry. The member already has
+        access via `all_in_org`, so the mint adds nothing.
         """
         now = datetime.now(UTC)
         async with migrator_session_scope() as db:
@@ -765,6 +792,14 @@ class ProjectShareService:
             if org is None or org.deleted_at is not None:
                 raise ShareNotFoundError("org_unavailable")
 
+            existing_membership = await db.get(
+                OrganisationMember, (org.id, accepting_actor_id)
+            )
+            if existing_membership is not None:
+                # Member already has access through their org bundle.
+                # Token is consumed (above), capability not minted.
+                return org, project
+
             cap = await mint_capability(
                 actor_id=accepting_actor_id,
                 operation="read",
@@ -787,14 +822,23 @@ class ProjectShareService:
             return org, project
 
     @staticmethod
-    async def list_pending_for_project(project_id: UUID) -> list[ProjectShare]:
-        """Active (non-consumed, non-expired) shares for a project. Used by
-        the project detail page so admins can see who's been invited."""
+    async def list_pending_for_project(
+        *, organisation_id: UUID, project_id: UUID
+    ) -> list[ProjectShare]:
+        """Active (non-consumed, non-expired) shares for a project.
+
+        `organisation_id` is required for defence-in-depth: this runs on
+        the BYPASSRLS migrator session, so a future caller passing only
+        `project_id` could otherwise pull a row that belongs to a
+        different org. The route layer always knows the pinned org via
+        `tenant_context`, so requiring it here costs nothing.
+        """
         now = datetime.now(UTC)
         async with migrator_session_scope() as db:
             stmt = (
                 select(ProjectShare)
                 .where(
+                    ProjectShare.organisation_id == organisation_id,
                     ProjectShare.project_id == project_id,
                     ProjectShare.consumed_at.is_(None),
                     ProjectShare.expires_at > now,

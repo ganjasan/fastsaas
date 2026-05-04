@@ -323,7 +323,9 @@ async def list_project_shares(
             detail={"code": "authz.forbidden"},
         )
 
-    rows = await ProjectShareService.list_pending_for_project(pctx.project.id)
+    rows = await ProjectShareService.list_pending_for_project(
+        organisation_id=pctx.org.id, project_id=pctx.project.id
+    )
     return [ProjectShareItem.model_validate(r) for r in rows]
 
 
@@ -343,7 +345,7 @@ async def revoke_project_share(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "share.not_found"},
+            detail={"code": "share.not_found_or_expired"},
         ) from e
 
     ok = await can(
@@ -367,7 +369,7 @@ async def revoke_project_share(
     except ShareNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "share.not_found"},
+            detail={"code": "share.not_found_or_expired"},
         ) from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

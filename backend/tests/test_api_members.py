@@ -403,6 +403,66 @@ async def test_change_role_last_owner_blocked(
     assert r.json()["detail"]["code"] == "org.last_owner"
 
 
+async def test_invite_blocks_duplicate_for_existing_member(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN an actor is already a member as `member` WHEN an admin re-invites
+    them as `admin` THEN the invite is rejected at mint time with 409
+    invite.already_member.
+
+    Combined with `MembershipService.accept`'s defence-in-depth idempotency
+    (the token is NOT burned for an actor already in the org), this means
+    the only way to change a role is the explicit
+    `PATCH /orgs/{slug}/members/{actor_id}` endpoint — never via a
+    silently-overloaded invite token."""
+    owner_access, _ = await _make_owner_with_org(client, mailhog)
+    _, _, _ = await _add_member(client, mailhog, owner_access, role="member")
+    members_listing = (
+        await client.get(
+            "/orgs/acme/members", headers={"Authorization": f"Bearer {owner_access}"}
+        )
+    ).json()["members"]
+    member_email = next(m["email"] for m in members_listing if m["role"] == "member")
+
+    r = await client.post(
+        "/orgs/acme/members/invite",
+        json={"email": member_email, "role": "admin"},
+        headers={"Authorization": f"Bearer {owner_access}"},
+    )
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "invite.already_member"
+
+
+async def test_cross_org_members_listing_404_no_leak(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN orgs `acme` and `globex` each with their own owner+members
+    WHEN owner of `acme` requests `/orgs/globex/members` THEN 404 — the
+    tenant-context gate must block any cross-org leak even on members
+    listings, regardless of org-level admin elsewhere.
+
+    Negative test for ADR-007 / phase 4: confirms the migrator-session
+    contained reads in MembershipService.list_members are gated by
+    tenant_context membership resolution before the service is called."""
+    pw = "correct horse battery staple"
+    acme_owner_access, _ = await _make_owner_with_org(client, mailhog)
+    # Spin up a second org with its own owner.
+    globex_owner_access = await _register_and_login(client, mailhog, _email(), pw)
+    r = await client.post(
+        "/orgs",
+        json={"name": "Globex", "slug": "globex"},
+        headers={"Authorization": f"Bearer {globex_owner_access}"},
+    )
+    assert r.status_code == 201
+
+    # Acme owner pokes globex.
+    r = await client.get(
+        "/orgs/globex/members", headers={"Authorization": f"Bearer {acme_owner_access}"}
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "org.not_found_or_forbidden"
+
+
 async def test_remove_member_deletes_membership_and_revokes_capabilities(
     client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
 ) -> None:
