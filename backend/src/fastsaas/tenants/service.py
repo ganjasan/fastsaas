@@ -31,6 +31,7 @@ from fastsaas.tenants.models import (
     OrganisationRole,
     OrgInvitation,
     Project,
+    ProjectShare,
 )
 
 
@@ -668,3 +669,178 @@ class ProjectService:
             # Project itself. Keeping the parameter on the signature so
             # the audit hook can grow without changing call sites.
             _ = actor_id
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Project shares (UC-001 — per-project guest)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+SHARE_DEFAULT_TTL = timedelta(days=14)
+SHARE_MAX_TTL = timedelta(days=30)
+
+
+class ShareTTLError(ValueError):
+    """Raised when a caller asks for a TTL above SHARE_MAX_TTL."""
+
+
+class ShareNotFoundError(Exception):
+    """Raised on accept when the token is unknown / consumed / expired."""
+
+
+class ProjectShareService:
+    """Mints and consumes per-project guest tokens (UC-001).
+
+    Distinct from MembershipService.invite/accept because the resulting
+    capability is resource-scoped (one project) and does NOT create an
+    organisation_members row. Guests pass through tenant_context via the
+    is_guest path defined in tenants.dependencies.
+    """
+
+    @staticmethod
+    async def share(
+        *,
+        org_id: UUID,
+        project_id: UUID,
+        email: str,
+        shared_by: UUID,
+        ttl: timedelta | None = None,
+    ) -> tuple[str, ProjectShare]:
+        """Mint a per-project share token. Returns `(raw_token, row)`."""
+        ttl = ttl or SHARE_DEFAULT_TTL
+        if ttl > SHARE_MAX_TTL:
+            raise ShareTTLError(f"ttl exceeds {SHARE_MAX_TTL.days}d cap")
+
+        async with migrator_session_scope() as db:
+            raw = secrets.token_urlsafe(_INVITE_TOKEN_BYTES)
+            row = ProjectShare(
+                project_id=project_id,
+                organisation_id=org_id,
+                email=email,
+                token_hash=_hash_invite_token(raw),
+                shared_by=shared_by,
+                expires_at=datetime.now(UTC) + ttl,
+            )
+            db.add(row)
+            await db.flush()
+            await db.refresh(row)
+            return raw, row
+
+    @staticmethod
+    async def accept(
+        *, raw_token: str, accepting_actor_id: UUID
+    ) -> tuple[Organisation, Project]:
+        """Consume the share, mint exactly one `read:project` capability
+        scoped to the project, and link the capability id back to the
+        share row for audit. Idempotent only in the sense of "no double-
+        mint": once consumed, the same token cannot be used again.
+
+        If the accepting actor is already a member of the share's org,
+        we still mint the resource-scoped capability for symmetry — the
+        member already had access via `all_in_org`, so the extra row is
+        a harmless duplicate that will be cleaned up by the next
+        revoke_bundle on the member.
+        """
+        now = datetime.now(UTC)
+        async with migrator_session_scope() as db:
+            stmt = (
+                update(ProjectShare)
+                .where(
+                    ProjectShare.token_hash == _hash_invite_token(raw_token),
+                    ProjectShare.consumed_at.is_(None),
+                    ProjectShare.expires_at > now,
+                )
+                .values(consumed_at=now, consumed_by=accepting_actor_id)
+                .returning(ProjectShare)
+            )
+            share = (await db.execute(stmt)).scalar_one_or_none()
+            if share is None:
+                raise ShareNotFoundError("share_not_found_or_expired")
+
+            project = await db.get(Project, share.project_id)
+            if project is None or project.deleted_at is not None:
+                raise ShareNotFoundError("project_unavailable")
+
+            org = await db.get(Organisation, share.organisation_id)
+            if org is None or org.deleted_at is not None:
+                raise ShareNotFoundError("org_unavailable")
+
+            cap = await mint_capability(
+                actor_id=accepting_actor_id,
+                operation="read",
+                resource_type="project",
+                resource_id=project.id,
+                granted_by=share.shared_by,
+                org_id=org.id,
+                bundle_name="role:guest_viewer",
+                expires_at=share.expires_at,
+                extra_metadata={
+                    "share_id": str(share.id),
+                    "project_id": str(project.id),
+                },
+                db=db,
+            )
+
+            share.consumed_capability_id = cap.id
+            db.add(share)
+            await db.flush()
+            return org, project
+
+    @staticmethod
+    async def list_pending_for_project(project_id: UUID) -> list[ProjectShare]:
+        """Active (non-consumed, non-expired) shares for a project. Used by
+        the project detail page so admins can see who's been invited."""
+        now = datetime.now(UTC)
+        async with migrator_session_scope() as db:
+            stmt = (
+                select(ProjectShare)
+                .where(
+                    ProjectShare.project_id == project_id,
+                    ProjectShare.consumed_at.is_(None),
+                    ProjectShare.expires_at > now,
+                )
+                .order_by(ProjectShare.created_at.asc())
+            )
+            return list((await db.execute(stmt)).scalars().all())
+
+    @staticmethod
+    async def revoke(*, share_id: UUID, revoked_by: UUID) -> None:
+        """Cancel a pending or active share. Soft-revokes the consumed
+        capability if one exists; marks the share row consumed so it can
+        no longer be redeemed.
+
+        Mirrors the soft-delete semantics elsewhere — never deletes the
+        share row, so a forensic timeline survives.
+        """
+        now = datetime.now(UTC)
+        async with migrator_session_scope() as db:
+            share = await db.get(ProjectShare, share_id)
+            if share is None:
+                raise ShareNotFoundError(str(share_id))
+
+            if share.consumed_at is None:
+                # Pending invite: just stamp consumed so it can't be redeemed.
+                share.consumed_at = now
+                share.consumed_by = revoked_by
+                db.add(share)
+                await db.flush()
+                return
+
+            # Already consumed — revoke the resulting capability if still active.
+            if share.consumed_capability_id is None:
+                return  # nothing to do
+            await db.execute(
+                update(Capability)
+                .where(
+                    Capability.id == share.consumed_capability_id,
+                    Capability.revoked_at.is_(None),
+                )
+                .values(
+                    revoked_at=now,
+                    meta=Capability.meta.op("||")(
+                        text(
+                            "jsonb_build_object('revoked_by', :rb, 'revoked_at', :ra)"
+                        ).bindparams(rb=str(revoked_by), ra=now.isoformat())
+                    ),
+                )
+            )

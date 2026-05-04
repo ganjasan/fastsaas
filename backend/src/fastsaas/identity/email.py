@@ -121,3 +121,29 @@ async def send_org_invitation(
         org_name=org_name,
         inviter_email=inviter_email,
     )
+
+
+async def send_project_share(
+    to: str,
+    raw_token: str,
+    *,
+    org_name: str,
+    project_name: str,
+    inviter_email: str,
+    ttl_days: int,
+) -> None:
+    """Per-project guest invite (UC-001). The accept page lives at
+    `/orgs/accept-share/<token>` on the SPA; the backend route is
+    `POST /orgs/projects/accept-share` (token in body)."""
+    name = get_settings().app_name
+    await send(
+        to=to,
+        subject=f"{inviter_email} shared {project_name} on {name}",
+        template="project_share",
+        url=_build_url("/orgs/accept-share", raw_token),
+        app_name=name,
+        org_name=org_name,
+        project_name=project_name,
+        inviter_email=inviter_email,
+        ttl_days=ttl_days,
+    )

@@ -114,6 +114,52 @@ class OrgInvitation(SQLModel, table=True):
     )
 
 
+class ProjectShare(SQLModel, table=True):
+    __tablename__ = "project_shares"
+
+    id: UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=text("gen_random_uuid()"),
+        )
+    )
+    project_id: UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False
+        )
+    )
+    organisation_id: UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True), ForeignKey("organisations.id"), nullable=False
+        )
+    )
+    email: str = Field(sa_column=Column(CITEXT, nullable=False))
+    token_hash: str = Field(sa_column=Column(String, unique=True, nullable=False))
+    shared_by: UUID = Field(
+        sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("actors.id"), nullable=False)
+    )
+    expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False)
+    )
+    consumed_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    consumed_by: UUID | None = Field(
+        default=None,
+        sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("actors.id"), nullable=True),
+    )
+    consumed_capability_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True), ForeignKey("capabilities.id"), nullable=True
+        ),
+    )
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    )
+
+
 class Project(SQLModel, table=True):
     __tablename__ = "projects"
 

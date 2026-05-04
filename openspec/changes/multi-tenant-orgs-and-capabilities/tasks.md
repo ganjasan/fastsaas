@@ -99,12 +99,25 @@ linked_issue: ganjasan/fastsaas#3
 
 ## 8. Per-project guest (UC-001)
 
-- [ ] 8.1 Add `MagicLinkPurpose.PROJECT_SHARE` enum value + alembic revision `0005_magic_link_purpose_project_share` (extends CHECK)
-- [ ] 8.2 `MembershipService.invite_guest(project, email)` — magic-link with `purpose=project_share`, `metadata.project_id`
-- [ ] 8.3 `MembershipService.accept_guest(token, actor)` — mints `role:guest_viewer` with `resource_id = project_id`; no `organisation_members` insert
-- [ ] 8.4 `api/projects.py::POST /orgs/{slug}/projects/{project_slug}/share`
-- [ ] 8.5 Email template `project-share.html`
-- [ ] 8.6 Tests — guest with read capability sees the project; guest cannot list other projects; guest cannot see members; revoking guest's capability blocks access immediately (cache invalidation)
+> Same architectural choice as phase 6: own table `project_shares`
+> (migration 0006), not an extension of magic_link_tokens — the share
+> is tied to a project + email, not to an existing actor, and pre-
+> registration is the common case.
+
+- [x] 8.1 Migration 0006 — `project_shares` table with `consumed_capability_id` FK to capabilities (so revoke can find and soft-revoke the resulting cap), partial indexes, RLS `tenant_isolation` on `organisation_id`.
+- [x] 8.2 `ProjectShareService.share(org_id, project_id, email, shared_by, ttl?)` — mints `ProjectShare` row; default 14-day TTL, capped at 30 (`SHARE_MAX_TTL`).
+- [x] 8.3 `ProjectShareService.accept(raw_token, accepting_actor_id)` — atomic UPDATE...RETURNING + `mint_capability(read, project, resource_id=project.id, bundle_name='role:guest_viewer', meta.org_id=...)`. The capability id is back-stamped onto the share for audit. NO `organisation_members` row created.
+- [x] 8.4 `ProjectShareService.list_pending_for_project` and `ProjectShareService.revoke(share_id, revoked_by)` — pending → stamp consumed; consumed → soft-revoke the linked Capability with audit metadata (`revoked_by`, `revoked_at` in `meta`).
+- [x] 8.5 Endpoints — `POST /orgs/{slug}/projects/{project_slug}/shares`, `GET .../shares`, `DELETE .../shares/{share_id}`, plus the parallel-router `POST /orgs/projects/accept-share`. The accept route lives at the parent /orgs path because the accepting actor doesn't yet know which org the share belongs to.
+- [x] 8.6 Email template `project_share.{txt,html}.j2` + `email.send_project_share(to, raw, *, org_name, project_name, inviter_email, ttl_days)`.
+- [x] 8.7 Tests — `tests/test_api_project_shares.py` (9 integration):
+   - guest reads only the shared project; cannot read sibling project (404), cannot list members (404), `GET /orgs` returns empty.
+   - ttl_days override honoured; ttl_days > 30 rejected at the schema layer (422).
+   - accept unknown token → 404; accept expired token → 404 (forced via direct UPDATE).
+   - non-admin (member) cannot share → 403.
+   - admin sees pending shares.
+   - revoke pending → token is invalidated (later accept → 404).
+   - revoke consumed → linked capability soft-revoked → guest's subsequent get returns 404.
 
 ## 9. Frontend — orgs feature
 

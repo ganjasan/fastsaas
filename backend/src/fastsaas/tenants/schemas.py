@@ -134,3 +134,44 @@ class ProjectListItem(BaseModel):
     name: str
     slug: str
     created_at: datetime
+
+
+# ── Project share (UC-001) ──────────────────────────────────────────────────
+
+
+class ProjectShareRequest(BaseModel):
+    email: EmailStr
+    ttl_days: int | None = Field(
+        default=None,
+        ge=1,
+        le=30,
+        description="TTL override; default 14, capped at 30.",
+    )
+
+
+class ProjectShareResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    email: str
+    expires_at: datetime
+
+
+class ProjectShareItem(BaseModel):
+    """Lighter projection for `GET /projects/{slug}/shares` listings."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+    shared_by: UUID
+    expires_at: datetime
+    created_at: datetime
+
+
+class AcceptShareRequest(BaseModel):
+    token: str = Field(min_length=20)
+
+
+class AcceptShareResponse(BaseModel):
+    org_slug: str
+    project_slug: str

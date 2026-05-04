@@ -22,29 +22,44 @@ Authorisation:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import Response
 
 from fastsaas.authz import Operation, ResourceType, can
 from fastsaas.authz.check import _load_active_capabilities
 from fastsaas.cache.redis import get_redis
-from fastsaas.identity.middleware import SessionDep, require_verified_email
+from fastsaas.identity.email import send_project_share
+from fastsaas.identity.middleware import (
+    SessionDep,
+    current_actor,
+    require_verified_email,
+)
+from fastsaas.identity.schemas import CurrentActor
 from fastsaas.tenants.dependencies import (
     ProjectContextDep,
     TenantContextDep,
 )
 from fastsaas.tenants.schemas import (
+    AcceptShareRequest,
+    AcceptShareResponse,
     ProjectCreateRequest,
     ProjectListItem,
     ProjectRead,
+    ProjectShareItem,
+    ProjectShareRequest,
+    ProjectShareResponse,
     ProjectUpdateRequest,
 )
 from fastsaas.tenants.service import (
     ProjectNotFoundError,
     ProjectService,
+    ProjectShareService,
     ProjectSlugTakenError,
+    ShareNotFoundError,
+    ShareTTLError,
 )
 from fastsaas.tenants.slugs import SlugError, validate_slug
 
@@ -222,3 +237,165 @@ async def delete_project(pctx: ProjectContextDep, db: SessionDep) -> Response:
             detail={"code": "project.not_found_or_forbidden"},
         ) from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ─── Per-project guest share (UC-001) ─────────────────────────────────────
+
+
+@router.post(
+    "/{project_slug}/shares",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProjectShareResponse,
+    dependencies=[Depends(require_verified_email)],
+)
+async def share_project(
+    body: ProjectShareRequest,
+    pctx: ProjectContextDep,
+    db: SessionDep,
+    background: BackgroundTasks,
+) -> ProjectShareResponse:
+    # `share:project` (held by owner/admin) is the right gate per ADR-013.
+    ok = await can(
+        pctx.actor.actor_id,
+        Operation.SHARE,
+        ResourceType.PROJECT,
+        pctx.project.id,
+        db=db,
+        cache=get_redis(),
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "authz.forbidden"},
+        )
+
+    ttl = timedelta(days=body.ttl_days) if body.ttl_days is not None else None
+    try:
+        raw, share = await ProjectShareService.share(
+            org_id=pctx.org.id,
+            project_id=pctx.project.id,
+            email=body.email,
+            shared_by=pctx.actor.actor_id,
+            ttl=ttl,
+        )
+    except ShareTTLError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "share.ttl_too_long", "message": str(e)},
+        ) from e
+
+    background.add_task(
+        send_project_share,
+        body.email,
+        raw,
+        org_name=pctx.org.name,
+        project_name=pctx.project.name,
+        inviter_email=pctx.actor.email,
+        ttl_days=(share.expires_at - share.created_at).days or 1,
+    )
+    return ProjectShareResponse(
+        id=share.id,
+        project_id=share.project_id,
+        email=share.email,
+        expires_at=share.expires_at,
+    )
+
+
+@router.get(
+    "/{project_slug}/shares",
+    response_model=list[ProjectShareItem],
+)
+async def list_project_shares(
+    pctx: ProjectContextDep, db: SessionDep
+) -> list[ProjectShareItem]:
+    # Listing pending shares is admin-flavoured visibility — gate on share.
+    ok = await can(
+        pctx.actor.actor_id,
+        Operation.SHARE,
+        ResourceType.PROJECT,
+        pctx.project.id,
+        db=db,
+        cache=get_redis(),
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "authz.forbidden"},
+        )
+
+    rows = await ProjectShareService.list_pending_for_project(pctx.project.id)
+    return [ProjectShareItem.model_validate(r) for r in rows]
+
+
+@router.delete(
+    "/{project_slug}/shares/{share_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def revoke_project_share(
+    share_id: str,
+    pctx: ProjectContextDep,
+    db: SessionDep,
+) -> Response:
+    from uuid import UUID as _UUID
+
+    try:
+        sid = _UUID(share_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "share.not_found"},
+        ) from e
+
+    ok = await can(
+        pctx.actor.actor_id,
+        Operation.SHARE,
+        ResourceType.PROJECT,
+        pctx.project.id,
+        db=db,
+        cache=get_redis(),
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "authz.forbidden"},
+        )
+
+    try:
+        await ProjectShareService.revoke(
+            share_id=sid, revoked_by=pctx.actor.actor_id
+        )
+    except ShareNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "share.not_found"},
+        ) from e
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# Note: this route lives at the parent /orgs path, NOT under /orgs/{slug}/...
+# because the accepting actor doesn't yet know which org the share belongs to.
+# We declare it on a parallel router so it doesn't pick up the project_router
+# prefix.
+accept_share_router = APIRouter(prefix="/orgs", tags=["projects"])
+
+
+@accept_share_router.post(
+    "/projects/accept-share",
+    status_code=status.HTTP_200_OK,
+    response_model=AcceptShareResponse,
+    dependencies=[Depends(require_verified_email)],
+)
+async def accept_project_share(
+    body: AcceptShareRequest,
+    actor: Annotated[CurrentActor, Depends(current_actor)],
+) -> AcceptShareResponse:
+    try:
+        org, project = await ProjectShareService.accept(
+            raw_token=body.token, accepting_actor_id=actor.actor_id
+        )
+    except ShareNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "share.not_found_or_expired"},
+        ) from e
+    return AcceptShareResponse(org_slug=org.slug, project_slug=project.slug)
