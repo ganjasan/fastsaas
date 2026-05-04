@@ -34,7 +34,7 @@ log = logging.getLogger(__name__)
 
 class AuditContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(  # type: ignore[override]
-        self, request: Request, call_next  # noqa: ANN001
+        self, request: Request, call_next
     ) -> Response:
         intent_hash, intent_metadata = compute_intent_hash(request)
         actor = await _maybe_resolve_actor(request)
@@ -88,7 +88,7 @@ async def _maybe_resolve_actor(request: Request) -> CurrentActor | None:
                 email=user.email,
                 email_verified=user.email_verified,
             )
-    except Exception:  # noqa: BLE001 - best-effort: audit context must never bring the request down
+    except Exception:
         log.warning("audit middleware: best-effort actor resolution failed", exc_info=True)
         return None
 

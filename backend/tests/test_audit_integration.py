@@ -28,7 +28,6 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from fastsaas import db as db_module
-from fastsaas.audit.redact import REDACTED_LITERAL
 from fastsaas.config import get_settings
 
 

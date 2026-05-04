@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
 import pytest
@@ -166,7 +166,7 @@ def _actor(actor_id: UUID) -> CurrentActor:
     )
 
 
-async def _peek(db: AsyncSession, *, entity_id: UUID) -> list[Any]:  # type: ignore[name-defined]
+async def _peek(db: AsyncSession, *, entity_id: UUID) -> list[Any]:
     rows = (
         await db.execute(
             text(
@@ -177,9 +177,6 @@ async def _peek(db: AsyncSession, *, entity_id: UUID) -> list[Any]:  # type: ign
         )
     ).all()
     return rows
-
-
-from typing import Any  # noqa: E402  — placed late to avoid clouding the test layout above
 
 
 # ─── Insert / update / delete listeners ────────────────────────────────────

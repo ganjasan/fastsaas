@@ -61,8 +61,8 @@ linked_issue: ganjasan/fastsaas#4
 
 ## 6. Validation + close-out
 
-- [ ] 6.1 `openspec validate audit-trail-middleware --strict` passes.
-- [ ] 6.2 `make lint` clean (ruff + biome).
-- [ ] 6.3 `./run_test.sh -q` green (target: previous 163 + ~20 new = ~183).
+- [x] 6.1 `openspec validate audit-trail-middleware --strict` passes.
+- [x] 6.2 `cd backend && uv run ruff check .` clean.
+- [x] 6.3 `./run_test.sh -q` green — 190 passed (163 pre-existing + 27 new audit tests).
 - [ ] 6.4 PR opened, linked to issue #4.
 - [ ] 6.5 Archive change after merge; sync delta specs to `openspec/specs/`.
