@@ -46,18 +46,8 @@ linked_issue: ganjasan/fastsaas#4
 
 ## 4. Documentation for Claude
 
-- [ ] 4.1 **`CLAUDE.md` at repo root** — top-level brief per design.md §D8:
-   - What FastSaaS is (three foundation layers).
-   - Architectural rules (must-not list).
-   - Where-to-look map.
-   - Recipes (copy-paste templates).
-   - Pointer to module-level CLAUDE.md files.
-- [ ] 4.2 **`backend/src/fastsaas/audit/CLAUDE.md`** — module guide per design.md §D8:
-   - Decision tree: explicit vs mixin.
-   - Recipe: add a downstream audited entity.
-   - Recipe: audit a non-CRUD operation.
-   - What NOT to do.
-   - Reading audit_log examples.
+- [x] 4.1 **`CLAUDE.md` at repo root** — what FastSaaS is, must-not architectural rules, where-to-look map, recipes (audited table, capability-gated route, vitest, e2e), pointer to module guides.
+- [x] 4.2 **`backend/src/fastsaas/audit/CLAUDE.md`** — explicit-vs-mixin decision tree, downstream entity recipe, non-CRUD recipe, redaction layering, RLS read examples, what-NOT-to-do, silent-coverage-gap failure mode.
 
 ## 5. Tests
 
