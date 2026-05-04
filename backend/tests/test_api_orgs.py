@@ -187,20 +187,13 @@ async def test_create_org_duplicate_slug_409(
     assert r.json()["detail"]["code"] == "org.slug_taken"
 
 
-async def test_create_org_unverified_email_403(
-    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+async def test_create_org_no_token_401(
+    client: AsyncClient, redis_client: Any, wipe_state: None
 ) -> None:
-    """GIVEN a registered-but-unverified user WHEN POST /orgs THEN 403."""
-    pw = "correct horse battery staple"
-    email = _email()
-    r = await client.post("/auth/register", json={"email": email, "password": pw})
-    assert r.status_code == 201
-    # Skip verify; login must still fail per ADR-008. Try /orgs with no token at all.
-    r = await client.post(
-        "/orgs", json={"name": "X", "slug": "x-org"}
-    )
-    # No token → 401, not 403; that still confirms the route is gated.
+    """GIVEN no Authorization header WHEN POST /orgs THEN 401 auth.token_missing."""
+    r = await client.post("/orgs", json={"name": "X", "slug": "x-org"})
     assert r.status_code == 401
+    assert r.json()["detail"]["code"] == "auth.token_missing"
 
 
 # ─── GET /orgs ─────────────────────────────────────────────────────────────

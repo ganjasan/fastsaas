@@ -15,7 +15,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
+from sqlalchemy.exc import IntegrityError
 
 from fastsaas.authz.models import Capability
 from fastsaas.authz.service import mint_bundle
@@ -54,40 +55,48 @@ class OrganisationService:
            `project_ids`; the `all_in_org` templates therefore mint zero
            rows, which is fine — `ProjectService.create` will mint them
            later for every active member bundle).
+
+        Concurrency: a SELECT-then-INSERT pre-check is racy by itself, so we
+        also catch `IntegrityError` on the unique slug index and re-raise as
+        `OrgSlugTakenError` — that turns a 500 into the spec-promised 409
+        when two POST /orgs requests with the same slug arrive in parallel.
         """
-        async with migrator_session_scope() as db:
-            existing = (
-                await db.execute(
-                    select(Organisation.id).where(Organisation.slug == slug).limit(1)
+        try:
+            async with migrator_session_scope() as db:
+                existing = (
+                    await db.execute(
+                        select(Organisation.id).where(Organisation.slug == slug).limit(1)
+                    )
+                ).scalar_one_or_none()
+                if existing is not None:
+                    raise OrgSlugTakenError(slug)
+
+                org = Organisation(name=name, slug=slug)
+                db.add(org)
+                await db.flush()
+
+                db.add(
+                    OrganisationMember(
+                        organisation_id=org.id,
+                        actor_id=owner_actor_id,
+                        role=OrganisationRole.OWNER,
+                    )
                 )
-            ).scalar_one_or_none()
-            if existing is not None:
-                raise OrgSlugTakenError(slug)
 
-            org = Organisation(name=name, slug=slug)
-            db.add(org)
-            await db.flush()
-
-            db.add(
-                OrganisationMember(
-                    organisation_id=org.id,
+                await mint_bundle(
                     actor_id=owner_actor_id,
-                    role=OrganisationRole.OWNER,
+                    bundle_name="role:owner",
+                    org_id=org.id,
+                    granted_by=owner_actor_id,  # self-grant on create
+                    project_ids=[],
+                    db=db,
                 )
-            )
 
-            await mint_bundle(
-                actor_id=owner_actor_id,
-                bundle_name="role:owner",
-                org_id=org.id,
-                granted_by=owner_actor_id,  # self-grant on create
-                project_ids=[],
-                db=db,
-            )
-
-            await db.flush()
-            await db.refresh(org)
-            return org
+                await db.flush()
+                await db.refresh(org)
+                return org
+        except IntegrityError as e:
+            raise OrgSlugTakenError(slug) from e
 
     @staticmethod
     async def list_for_actor(actor_id: UUID) -> list[tuple[Organisation, OrganisationRole]]:
@@ -121,6 +130,11 @@ class OrganisationService:
         Active projects are NOT individually marked deleted — they live
         under the org and are filtered by `Organisation.deleted_at IS NULL`
         wherever they're listed.
+
+        `actor_id` is recorded inside `Capability.meta.revoked_by` (audit
+        breadcrumb) but NEVER overwrites `granted_by` — that column is
+        immutable so audit reconstruction can answer "who originally minted
+        this owner bundle?" even after revocation.
         """
         now = datetime.now(UTC)
         async with migrator_session_scope() as db:
@@ -131,14 +145,24 @@ class OrganisationService:
             org.deleted_at = now
             db.add(org)
 
-            # Revoke every bundle row tagged with this org.
+            # Revoke every bundle row tagged with this org. Stamp who
+            # revoked into metadata; leave `granted_by` (immutable) alone.
+            # `meta || jsonb_build_object(...)` merges keys without
+            # clobbering pre-existing entries on the row.
             await db.execute(
                 update(Capability)
                 .where(
                     Capability.meta["org_id"].astext == str(org_id),
                     Capability.revoked_at.is_(None),
                 )
-                .values(revoked_at=now, granted_by=actor_id)
+                .values(
+                    revoked_at=now,
+                    meta=Capability.meta.op("||")(
+                        text(
+                            "jsonb_build_object('revoked_by', :rb, 'revoked_at', :ra)"
+                        ).bindparams(rb=str(actor_id), ra=now.isoformat())
+                    ),
+                )
             )
 
     @staticmethod

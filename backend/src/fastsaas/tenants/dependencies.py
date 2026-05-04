@@ -20,10 +20,11 @@ Non-member / unknown-slug requests get HTTP 404 with
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 
 from fastsaas.authz.models import Capability
 from fastsaas.db import migrator_session_scope
@@ -71,7 +72,13 @@ async def _resolve_membership(
         if member is not None:
             return org, False
 
-        # Guest path (UC-001): an active capability tagged with this org's id.
+        # Guest path (UC-001): an active, unexpired capability tagged with
+        # this org's id. We mirror `can()` semantics here (revoked / blocked /
+        # expired all bar access) so an expired share-link does NOT pass
+        # tenant_context — the alternative would route the user past the 404
+        # layer and into a deeper 403, which is a worse UX and a small
+        # information leak.
+        now = datetime.now(UTC)
         guest_cap = (
             await s.execute(
                 select(Capability)
@@ -79,6 +86,10 @@ async def _resolve_membership(
                     Capability.actor_id == actor_id,
                     Capability.revoked_at.is_(None),
                     Capability.policy_blocked.is_(False),
+                    or_(
+                        Capability.expires_at.is_(None),
+                        Capability.expires_at > now,
+                    ),
                     Capability.meta["org_id"].astext == str(org.id),
                 )
                 .limit(1)

@@ -13,7 +13,7 @@ tests bound to a stale event loop; the autouse fixture resets it per test.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -180,6 +180,35 @@ class TestResolveMembership:
         org, is_guest = result
         assert org.id == org_id
         assert is_guest is True
+
+    async def test_expired_capability_does_not_grant_guest_access(
+        self, setup_session: AsyncSession
+    ) -> None:
+        # GIVEN a guest's capability has expired (expires_at in the past)
+        async with setup_session.begin():
+            actor_id = await _mk_actor(setup_session, email="exp@test.local")
+            org_id = await _mk_org(setup_session, slug="acme")
+            granted_by = await _mk_actor(setup_session, email="grantor3@test.local")
+            past = datetime.now(UTC) - timedelta(hours=1)
+            setup_session.add(
+                Capability(
+                    actor_id=actor_id,
+                    operation="read",
+                    resource_type="project",
+                    resource_id=uuid4(),
+                    bundle_name="role:guest_viewer",
+                    granted_by=granted_by,
+                    expires_at=past,
+                    meta={"org_id": str(org_id)},
+                )
+            )
+
+        # WHEN _resolve_membership is called
+        result = await _resolve_membership(slug="acme", actor_id=actor_id)
+
+        # THEN the expired capability is ignored — actor cannot reach the org
+        # (would otherwise UI-leak existence behind a deeper 403)
+        assert result is None
 
     async def test_revoked_capability_does_not_grant_guest_access(
         self, setup_session: AsyncSession
