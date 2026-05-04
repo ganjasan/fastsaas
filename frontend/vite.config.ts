@@ -34,11 +34,21 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Same-origin proxy keeps the refresh httpOnly cookie working in dev.
         "/api": { target: apiBase, changeOrigin: true },
-        // /auth/* is shared: the FE renders pages at /auth/login etc., AND
-        // the backend exposes JSON endpoints at /auth/login etc. Distinguish
-        // by Accept: navigation requests (text/html) fall through to Vite's
-        // SPA index; XHR / fetch (application/json or */*) get proxied.
+        // /auth/* and /orgs/* are shared between SPA routes and backend
+        // JSON endpoints. Distinguish by Accept: navigation requests
+        // (text/html) fall through to Vite's SPA index; XHR / fetch
+        // (application/json / */*) get proxied. Without this, orval-
+        // generated API calls to e.g. `GET /orgs` would receive Vite's
+        // SPA index.html instead of backend JSON, and the empty-state
+        // would never render.
         "/auth": {
+          target: apiBase,
+          changeOrigin: true,
+          bypass(req) {
+            if (req.headers.accept?.includes("text/html")) return req.url;
+          },
+        },
+        "/orgs": {
           target: apiBase,
           changeOrigin: true,
           bypass(req) {
