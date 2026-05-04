@@ -104,7 +104,7 @@ async def record(
     return row
 
 
-async def record_via_connection(
+def record_via_connection(
     connection: Any,
     *,
     action: AuditAction,
@@ -117,12 +117,15 @@ async def record_via_connection(
     intent_metadata: dict[str, Any],
     extra_redact: Iterable[str] | None = None,
 ) -> None:
-    """Synchronous-style INSERT used by mapper-event listeners.
+    """Synchronous INSERT used by mapper-event listeners.
 
-    Listeners receive a SQLAlchemy `Connection` (or its async wrapper) — not
-    an `AsyncSession`. They can't `await` the high-level `record(...)` from a
-    sync event hook either; this helper does a single `connection.execute`
-    against the same connection so the row joins the caller's transaction.
+    Mapper events fire synchronously inside the flush. Even on an async
+    engine, the callback runs in the greenlet adapter — the `connection`
+    argument is a sync `Connection` (or its greenlet-wrapped equivalent),
+    and `connection.execute(...)` is a plain blocking call. Defining this
+    helper as `async def` would make the call site `await`-needing, which
+    the sync event hook can't do — the result was a never-awaited coroutine
+    and zero audit rows.
     """
     redacted_diff = redact(diff, extra=extra_redact)
     connection.execute(

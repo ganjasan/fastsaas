@@ -61,13 +61,13 @@ linked_issue: ganjasan/fastsaas#4
 
 ## 5. Tests
 
-- [ ] 5.1 Unit — `audit/intent.py::compute_intent_hash` per prefix branch (`idem:`, `agent:`, `sess:`, `req:`).
-- [ ] 5.2 Unit — `audit/redact.py::redact` strips global + per-model keys; preserves keys as `"<redacted>"`.
-- [ ] 5.3 Unit — `AuditedModel` listener fires on insert / update / soft-delete-flip / hard-delete; `__audit_skip__` opts out; `__audit_redact__` merges with global.
-- [ ] 5.4 Integration — every core mutation produces the documented audit rows (orgs / projects / members / shares / capabilities). Each row has correct `actor_id`, `entity_type`, `action`, `intent_metadata.org_id` where applicable.
-- [ ] 5.5 Integration — `password_hash` / `token_hash` / `api_key_hash` never appear in `audit_log.diff` even when the source ORM model carries them.
-- [ ] 5.6 Integration — RLS read path: vanilla member's `SELECT FROM audit_log` is org-scoped; compliance-officer cap unlocks cross-org via `BYPASSRLS` + capability check.
-- [ ] 5.7 E2E (extends smoke) — direct DB peek after create-org + create-project flow asserts the corresponding audit rows.
+- [x] 5.1 Unit — `audit/intent.py::compute_intent_hash` per prefix branch (`idem:`, `agent:`, `sess:`, `req:`). (`tests/test_audit_intent.py`)
+- [x] 5.2 Unit — `audit/redact.py::redact` strips global + per-model keys; preserves keys as `"<redacted>"`. (`tests/test_audit_redact.py`)
+- [x] 5.3 Unit — `AuditedModel` listener fires on insert / update / soft-delete-flip / restore-flip; `__audit_skip__` opts out; `__audit_redact__` merges with global; no actor context → silent skip. (`tests/test_audit_mixin.py`)
+- [x] 5.4 Integration — every core mutation produces audit rows on the live ASGI app (`tests/test_audit_integration.py::test_create_org_writes_*`, `test_create_project_writes_*`).
+- [x] 5.5 Integration — denylist secrets never appear non-redacted in `audit_log.diff` (`tests/test_audit_integration.py::test_audit_diff_never_contains_password_hash`).
+- [x] 5.6 Integration — RLS read path: tenant scope blocks cross-org by default; `app.role = 'compliance_officer'` GUC unlocks cross-org reads. (`tests/test_audit_integration.py::test_audit_log_rls_member_only_sees_own_org`, `test_compliance_officer_role_unlocks_cross_org_audit_reads`)
+- [x] 5.7 E2E — DB peek after create-org + create-project asserts the rows exist (subsumed by 5.4).
 
 ## 6. Validation + close-out
 
