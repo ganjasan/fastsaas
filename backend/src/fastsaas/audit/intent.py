@@ -29,9 +29,22 @@ from fastapi import Request
 
 _HASH_LEN = 16  # hex chars
 
+# Cap client-controlled string fields before they reach immortal `audit_log`
+# storage. Keeps an authenticated attacker from writing arbitrarily large
+# `X-Agent-Intent` / `X-Request-ID` / `User-Agent` headers into every row
+# they generate. uvicorn's default total-header limit (~8KB) is deployment-
+# dependent; this is the in-app backstop that survives deployment drift.
+_MAX_FIELD_LEN = 4096
+
 
 def _short(payload: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:_HASH_LEN]
+
+
+def _bounded(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value[:_MAX_FIELD_LEN]
 
 
 def compute_intent_hash(request: Request) -> tuple[str, dict[str, Any]]:
@@ -44,20 +57,20 @@ def compute_intent_hash(request: Request) -> tuple[str, dict[str, Any]]:
     if downstreams want to suppress it).
     """
     headers = request.headers
-    request_id = headers.get("x-request-id") or uuid.uuid4().hex
+    request_id = _bounded(headers.get("x-request-id")) or uuid.uuid4().hex
 
     metadata: dict[str, Any] = {
         "request_id": request_id,
         "path": str(request.url.path),
         "method": request.method,
     }
-    ua = headers.get("user-agent")
+    ua = _bounded(headers.get("user-agent"))
     if ua:
         metadata["user_agent"] = ua
     if request.client is not None:
         metadata["ip"] = request.client.host
 
-    agent_intent = headers.get("x-agent-intent")
+    agent_intent = _bounded(headers.get("x-agent-intent"))
     if agent_intent:
         metadata["original_prompt"] = agent_intent
         return f"agent:{_short(agent_intent)}", metadata

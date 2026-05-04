@@ -191,6 +191,18 @@ Routes that expose audit reads MUST gate on the
 `role:compliance_officer` capability before pinning the GUC — the GUC
 itself is not authentication.
 
+### Untrusted strings on the read side
+
+`intent_metadata.original_prompt`, `intent_metadata.user_agent`, and
+`intent_metadata.path` contain client-controlled values straight from the
+request. JSON encoding by Pydantic / asyncpg keeps them safe in API
+responses, but read-side renderers (admin UI, PDF report exports, Slack
+notifications) MUST treat these fields as untrusted strings and escape
+them appropriately for their output context. Never interpolate them into
+HTML, shell commands, or LLM prompts without escaping. Length is bounded
+to 4096 chars at write time (`audit/intent.py::_bounded`), but content
+is verbatim — assume malicious payloads.
+
 ## What NOT to do
 
 - **Do NOT bypass `record(...)` with raw SQL writes to domain tables.**

@@ -34,24 +34,36 @@ GLOBAL_REDACT: frozenset[str] = frozenset(
 REDACTED_LITERAL = "<redacted>"
 
 
-def _redact_side(side: dict[str, Any], deny: frozenset[str]) -> dict[str, Any]:
-    return {k: (REDACTED_LITERAL if k in deny else v) for k, v in side.items()}
+def _redact_value(value: Any, deny: frozenset[str]) -> Any:
+    """Recursively mask denied keys inside dicts and lists.
+
+    ORM column-level diffs are flat, but explicit `record(...)` callers
+    can pass nested structures (e.g. settings updates with a nested
+    `oauth.client_secret`). Walking only the top level would leak secrets
+    that happen to live one level deep. Lists are traversed so a list of
+    dicts (e.g. config snapshots) is also covered.
+    """
+    if isinstance(value, dict):
+        return {
+            k: (REDACTED_LITERAL if k in deny else _redact_value(v, deny))
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_value(item, deny) for item in value]
+    return value
 
 
 def redact(
     diff: dict[str, Any], *, extra: Iterable[str] | None = None
 ) -> dict[str, Any]:
-    """Return a new diff with `before` / `after` sensitive keys masked.
+    """Return a new diff with `before` / `after` sensitive keys masked
+    recursively at any depth.
 
     The shape `{"before": {...}, "after": {...}}` is preserved; missing
     sides default to `{}` so callers don't have to construct empty dicts.
-    Non-string keys in either side are kept untouched (the denylist is
-    string-only and Python dict keys for an ORM diff are always strings).
     """
     deny = GLOBAL_REDACT if extra is None else GLOBAL_REDACT | frozenset(extra)
-    before = diff.get("before") or {}
-    after = diff.get("after") or {}
     return {
-        "before": _redact_side(before, deny),
-        "after": _redact_side(after, deny),
+        "before": _redact_value(diff.get("before") or {}, deny),
+        "after": _redact_value(diff.get("after") or {}, deny),
     }

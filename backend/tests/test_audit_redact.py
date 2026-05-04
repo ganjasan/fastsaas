@@ -88,3 +88,47 @@ class TestShapeInvariants:
         # carried a password_hash without learning what it was.
         assert "password_hash" in out["after"]
         assert out["after"]["password_hash"] == REDACTED_LITERAL
+
+
+class TestRecursiveRedaction:
+    """Explicit `record(...)` callers can pass nested diffs (e.g. a settings
+    update with `oauth.client_secret`). The redactor must mask sensitive
+    keys at any depth, not just the top level."""
+
+    def test_secret_nested_in_dict_is_masked(self) -> None:
+        # GIVEN a diff with a denied key nested inside a sub-dict
+        diff = {
+            "before": {},
+            "after": {"oauth": {"client_id": "abc", "client_secret": "shhh"}},
+        }
+        # WHEN redact runs
+        out = redact(diff)
+        # THEN the nested value is masked but its sibling is preserved
+        assert out["after"]["oauth"]["client_secret"] == REDACTED_LITERAL
+        assert out["after"]["oauth"]["client_id"] == "abc"
+
+    def test_secret_nested_in_list_of_dicts_is_masked(self) -> None:
+        # GIVEN a diff carrying a list of dicts (e.g. a config snapshot)
+        diff = {
+            "before": {},
+            "after": {
+                "providers": [
+                    {"name": "github", "client_secret": "s1"},
+                    {"name": "google", "client_secret": "s2"},
+                ]
+            },
+        }
+        # WHEN redact runs
+        out = redact(diff)
+        # THEN every list item has its denied key masked
+        for item in out["after"]["providers"]:
+            assert item["client_secret"] == REDACTED_LITERAL
+        assert {item["name"] for item in out["after"]["providers"]} == {"github", "google"}
+
+    def test_extra_denylist_propagates_into_nested_structures(self) -> None:
+        # GIVEN a per-call extra denylist and a nested diff
+        diff = {"before": {}, "after": {"meta": {"stripe_customer_id": "cus_123"}}}
+        # WHEN redact runs with `stripe_customer_id` extra
+        out = redact(diff, extra={"stripe_customer_id"})
+        # THEN the nested value is masked
+        assert out["after"]["meta"]["stripe_customer_id"] == REDACTED_LITERAL

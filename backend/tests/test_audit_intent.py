@@ -115,3 +115,37 @@ def test_each_source_prefix_in_isolation(
     intent_hash, _ = compute_intent_hash(request)
     # THEN that source's prefix is selected
     assert intent_hash.startswith(expected_prefix)
+
+
+class TestUnboundedHeadersAreCapped:
+    """Authenticated attackers can stamp arbitrarily large header values;
+    `audit_log` is immortal, so bounded storage is the only fix once a
+    huge header is accepted by the ASGI server. The cap is enforced in
+    `intent.py::_bounded` and runs before headers reach storage."""
+
+    def test_oversize_x_agent_intent_truncated_in_metadata(self) -> None:
+        # GIVEN an X-Agent-Intent header far above the cap
+        big = b"A" * 10_000
+        request = _request([(b"x-agent-intent", big)])
+        # WHEN compute_intent_hash runs
+        _, metadata = compute_intent_hash(request)
+        # THEN original_prompt is truncated to the cap (4096 chars)
+        assert len(metadata["original_prompt"]) == 4096
+
+    def test_oversize_x_request_id_truncated_in_metadata(self) -> None:
+        # GIVEN an X-Request-ID header far above the cap
+        request = _request([(b"x-request-id", b"R" * 10_000)])
+        # WHEN compute_intent_hash runs
+        intent_hash, metadata = compute_intent_hash(request)
+        # THEN both the metadata field and the intent_hash itself are bounded
+        assert len(metadata["request_id"]) == 4096
+        assert intent_hash == f"req:{metadata['request_id']}"
+        assert len(intent_hash) <= 4096 + len("req:")
+
+    def test_oversize_user_agent_truncated_in_metadata(self) -> None:
+        # GIVEN an enormous User-Agent header
+        request = _request([(b"user-agent", b"U" * 10_000)])
+        # WHEN compute_intent_hash runs
+        _, metadata = compute_intent_hash(request)
+        # THEN it's truncated before it reaches the audit row
+        assert len(metadata["user_agent"]) == 4096
