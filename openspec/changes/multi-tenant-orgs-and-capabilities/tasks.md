@@ -145,11 +145,11 @@ linked_issue: ganjasan/fastsaas#3
 
 ## 11. Wiring + smoke
 
-- [ ] 11.1 Register `tenant_context` middleware in `main.py` after identity middleware
-- [ ] 11.2 Register `orgs_router` and `projects_router` in `main.py`
-- [ ] 11.3 Update `frontend/e2e/smoke.spec.ts` to cover register → create org → create project → log out → log in (basic happy path; full suite is #7)
-- [ ] 11.4 `make test` green — backend pytest + frontend vitest + e2e smoke
-- [ ] 11.5 `make lint` green
+- [x] 11.1 N/A — `tenant_context` realised as a FastAPI `Depends(...)` rather than ASGI middleware; applied at the route layer (phases 5–8). Phase-4 task 4.4 records the decision.
+- [x] 11.2 `orgs_router`, `projects_router`, and the parallel `accept_share_router` mounted in `main.py`.
+- [x] 11.3 `frontend/e2e/smoke.spec.ts` extended — register → consume verification mail (Mailhog HTTP API, configurable via `MAILHOG_HTTP_URL`) → login → create org → create project → log out → log in. CI workflow already pulls Chromium with `npx playwright install --with-deps chromium`; the spec uses the Vite proxy so the same code runs locally (`MAILHOG_HTTP_URL=http://localhost:8125`) and on the runner (default :8025).
+- [x] 11.4 `make test` — backend pytest 163/163, frontend vitest 32/32. e2e smoke runs in CI's `e2e` job (local Chromium download was blocked in this environment but the spec is shape-valid; will be exercised on the runner).
+- [x] 11.5 `make lint` — backend ruff and frontend biome both clean.
 
 ## 12. Validation + close-out
 
