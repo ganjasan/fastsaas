@@ -30,7 +30,7 @@ from fastsaas.authz.models import Capability
 from fastsaas.db import migrator_session_scope
 from fastsaas.identity.middleware import SessionDep, current_actor
 from fastsaas.identity.schemas import CurrentActor
-from fastsaas.tenants.models import Organisation, OrganisationMember
+from fastsaas.tenants.models import Organisation, OrganisationMember, Project
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,3 +145,48 @@ async def require_org_member(ctx: TenantContextDep) -> TenantContext:
             detail={"code": "org.not_found_or_forbidden"},
         )
     return ctx
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectContext:
+    """Sub-context resolved by `project_context`. Inherits the actor + org
+    from `tenant_context` and adds the resolved `project` row.
+    `is_guest` is propagated unchanged."""
+
+    org: Organisation
+    actor: CurrentActor
+    project: Project
+    is_guest: bool
+
+
+async def project_context(
+    project_slug: str,
+    ctx: TenantContextDep,
+    db: SessionDep,
+) -> ProjectContext:
+    """Resolve `project_slug` within the pinned org. 404 if missing /
+    soft-deleted — same shape as the org-level miss to avoid leaking which
+    projects exist in an org the caller can otherwise see.
+
+    SELECTs against `projects` rely on `app.current_org` already being set
+    by `tenant_context`, so the RLS `tenant_isolation` policy
+    short-circuits any cross-org leak even if the slug were guessed.
+    """
+    proj = (
+        await db.execute(
+            select(Project).where(
+                Project.organisation_id == ctx.org.id,
+                Project.slug == project_slug,
+                Project.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if proj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "project.not_found_or_forbidden"},
+        )
+    return ProjectContext(org=ctx.org, actor=ctx.actor, project=proj, is_guest=ctx.is_guest)
+
+
+ProjectContextDep = Annotated[ProjectContext, Depends(project_context)]

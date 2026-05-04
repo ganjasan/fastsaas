@@ -114,11 +114,18 @@ async def mint_capability(
     resource_id: UUID | None,
     granted_by: UUID,
     org_id: UUID | None = None,
+    bundle_name: str | None = None,
     expires_at: datetime | None = None,
     extra_metadata: dict[str, Any] | None = None,
     db: AsyncSession,
 ) -> Capability:
-    """Mint a single one-off capability (no bundle)."""
+    """Mint a single one-off capability.
+
+    `bundle_name` lets project-create propagate `all_in_org` rows for an
+    existing primary bundle (e.g. `role:member`) so that revoke-by-bundle
+    later cleans them up too. Pass `None` for genuine one-offs (UC-001
+    guest grants).
+    """
     meta: dict[str, Any] = {}
     if org_id is not None:
         meta["org_id"] = str(org_id)
@@ -130,6 +137,7 @@ async def mint_capability(
         operation=operation,
         resource_type=resource_type,
         resource_id=resource_id,
+        bundle_name=bundle_name,
         granted_by=granted_by,
         expires_at=expires_at,
         meta=meta,

@@ -82,13 +82,20 @@ linked_issue: ganjasan/fastsaas#3
 
 ## 7. Project service + endpoints
 
-- [ ] 7.1 `ProjectService.create(org, name, slug)` — insert project; loop active org member bundles and mint `all_in_org` rows for the new project
-- [ ] 7.2 `ProjectService.list_in_org(org)` — RLS-scoped SELECT; filter `deleted_at IS NULL`
-- [ ] 7.3 `ProjectService.get(slug, org)` — single read
-- [ ] 7.4 `ProjectService.soft_delete(project_id)` — sets `deleted_at`; revokes project-scoped bundles for non-members? **No** — keep capabilities, soft-deleted project is hidden by app filter; restoration restores access naturally
-- [ ] 7.5 `api/projects.py` — POST/GET/PATCH/DELETE under /orgs/{slug}/projects
-- [ ] 7.6 `require_capability("write", "project")` on POST/PATCH/DELETE; `require_capability("read", "project")` on GET
-- [ ] 7.7 Tests — project create mints capabilities for all members; member without write fails 403; viewer can read
+- [x] 7.1 `ProjectService.create(org_id, name, slug, description, created_by)` — insert + fan-out: for every active member, mint capability rows for the `all_in_org` project templates of their primary bundle (operation × project × resource_id=new_project.id). One transaction.
+- [x] 7.2 `ProjectService.list_in_org(org_id)` — `SELECT WHERE deleted_at IS NULL`, ordered by created_at.
+- [x] 7.3 `ProjectService.get_by_slug(org_id, slug)` — single read.
+- [x] 7.4 `ProjectService.update(project_id, name?, description?)` + `ProjectService.soft_delete(project_id, actor_id)` — capabilities are LEFT in place on soft-delete (restoration in Phase 2 backlog re-uses them; listing endpoints filter on `deleted_at IS NULL`).
+- [x] 7.5 `api/projects.py` — `POST /orgs/{slug}/projects`, `GET`, `GET/{project_slug}`, `PATCH/{project_slug}`, `DELETE/{project_slug}`. Wired into `main.py`.
+- [x] 7.6 Authorization at the route boundary:
+   - `POST /projects`        → `can(admin, organisation, org.id)` (the project doesn't exist yet, so resource-scoped project caps cannot be checked); guests rejected.
+   - `GET  /projects`        → members see all; guests see only those with an active `read:project` capability (UC-001 list-side enforcement).
+   - `GET  /projects/{slug}` → `can(read, project, project.id)`; 404 on miss (no info leak between projects in the same org).
+   - `PATCH /projects/{slug}` → `can(write, project, project.id)`.
+   - `DELETE /projects/{slug}` → `can(admin, project, project.id)`.
+- [x] 7.7 New `ProjectContext` + `project_context` dependency — resolves `{project_slug}` against the pinned org via the request's `app_user` session (RLS active), 404 on miss with `code = "project.not_found_or_forbidden"`.
+- [x] 7.8 `mint_capability` extended to accept `bundle_name=` so project-create's fan-out tags new rows with the same primary bundle as the membership row, allowing future `revoke_bundle` calls to reach them.
+- [x] 7.9 Tests — `tests/test_api_projects.py` (12 integration): owner create happy path; invalid/duplicate slug; member create 403; member sees all listed; unknown project 404; member updates 200, viewer 403; member delete 403, owner deletes → 204 → subsequent get 404 + list empty; **all_in_org propagation**: viewer joined before project exists still gets read access on a later-created project.
 
 ## 8. Per-project guest (UC-001)
 

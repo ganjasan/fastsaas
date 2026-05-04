@@ -20,8 +20,9 @@ from uuid import UUID
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 
+from fastsaas.authz.bundles import BUNDLES, Scope
 from fastsaas.authz.models import Capability
-from fastsaas.authz.service import mint_bundle, revoke_bundle
+from fastsaas.authz.service import mint_bundle, mint_capability, revoke_bundle
 from fastsaas.db import migrator_session_scope
 from fastsaas.identity.models import Actor, User
 from fastsaas.tenants.models import (
@@ -516,3 +517,154 @@ async def _assert_not_last_owner(db, *, org_id: UUID) -> None:
     owners = (await db.execute(stmt)).scalars().all()
     if len(owners) <= 1:
         raise LastOwnerError(str(org_id))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Projects
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ProjectSlugTakenError(Exception):
+    """Raised when a project with this slug already exists in the org."""
+
+
+class ProjectNotFoundError(Exception):
+    """Raised when targeting a non-existent (or soft-deleted) project."""
+
+
+class ProjectService:
+    """Encapsulates project-level domain operations.
+
+    `create` is the only mutation that needs to fan out — when a new project
+    appears, every active member's `all_in_org` bundle templates need a
+    matching capability row scoped to the new project's id (otherwise their
+    bundle wouldn't actually grant anything on this new project). This is
+    done in the same transaction as the project insert so the project is
+    never visible without the matching grants.
+    """
+
+    @staticmethod
+    async def create(
+        *,
+        org_id: UUID,
+        name: str,
+        slug: str,
+        description: str | None,
+        created_by: UUID,
+    ) -> Project:
+        try:
+            async with migrator_session_scope() as db:
+                existing = (
+                    await db.execute(
+                        select(Project.id).where(
+                            Project.organisation_id == org_id,
+                            Project.slug == slug,
+                        ).limit(1)
+                    )
+                ).scalar_one_or_none()
+                if existing is not None:
+                    raise ProjectSlugTakenError(slug)
+
+                project = Project(
+                    organisation_id=org_id,
+                    name=name,
+                    slug=slug,
+                    description=description,
+                    created_by=created_by,
+                )
+                db.add(project)
+                await db.flush()
+
+                # Fan out `all_in_org` bundle templates for every active
+                # member: one capability row per (member, template).
+                members = (
+                    await db.execute(
+                        select(OrganisationMember).where(
+                            OrganisationMember.organisation_id == org_id,
+                        )
+                    )
+                ).scalars().all()
+                for m in members:
+                    bundle_name = f"role:{OrganisationRole(m.role).value}"
+                    templates = BUNDLES.get(bundle_name, [])
+                    for t in templates:
+                        if t.scope is not Scope.ALL_IN_ORG:
+                            continue
+                        if t.resource_type.value != "project":
+                            continue
+                        await mint_capability(
+                            actor_id=m.actor_id,
+                            operation=t.operation.value,
+                            resource_type=t.resource_type.value,
+                            resource_id=project.id,
+                            granted_by=created_by,
+                            org_id=org_id,
+                            bundle_name=bundle_name,
+                            db=db,
+                        )
+
+                await db.refresh(project)
+                return project
+        except IntegrityError as e:
+            raise ProjectSlugTakenError(slug) from e
+
+    @staticmethod
+    async def list_in_org(org_id: UUID) -> list[Project]:
+        async with migrator_session_scope() as db:
+            stmt = (
+                select(Project)
+                .where(
+                    Project.organisation_id == org_id,
+                    Project.deleted_at.is_(None),
+                )
+                .order_by(Project.created_at.asc())
+            )
+            return list((await db.execute(stmt)).scalars().all())
+
+    @staticmethod
+    async def get_by_slug(*, org_id: UUID, slug: str) -> Project | None:
+        async with migrator_session_scope() as db:
+            stmt = select(Project).where(
+                Project.organisation_id == org_id,
+                Project.slug == slug,
+                Project.deleted_at.is_(None),
+            )
+            return (await db.execute(stmt)).scalar_one_or_none()
+
+    @staticmethod
+    async def update(
+        *,
+        project_id: UUID,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> Project:
+        async with migrator_session_scope() as db:
+            project = await db.get(Project, project_id)
+            if project is None or project.deleted_at is not None:
+                raise ProjectNotFoundError(str(project_id))
+            if name is not None:
+                project.name = name
+            if description is not None:
+                project.description = description
+            db.add(project)
+            await db.flush()
+            await db.refresh(project)
+            return project
+
+    @staticmethod
+    async def soft_delete(*, project_id: UUID, actor_id: UUID) -> None:
+        """Soft-delete the project. Capability rows scoped to the project are
+        left in place — restore (Phase 2 backlog) re-uses them. Listing
+        endpoints filter on `deleted_at IS NULL`, which is enough."""
+        now = datetime.now(UTC)
+        async with migrator_session_scope() as db:
+            project = await db.get(Project, project_id)
+            if project is None or project.deleted_at is not None:
+                raise ProjectNotFoundError(str(project_id))
+            project.deleted_at = now
+            db.add(project)
+            # NB: actor_id intentionally unused here — soft-delete leaves a
+            # trail in the soon-to-be audit_log middleware (#4), not on
+            # Project itself. Keeping the parameter on the signature so
+            # the audit hook can grow without changing call sites.
+            _ = actor_id
