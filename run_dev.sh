@@ -13,15 +13,29 @@
 # Usage:
 #   ./run_dev.sh                bring everything up, stream logs
 #   ./run_dev.sh --no-migrate   skip alembic upgrade (assumes DB already at head)
+#   ./run_dev.sh --seed         load deterministic dev seed (idempotent)
+#   ./run_dev.sh --clean        wipe DB + Redis volumes, remigrate, reseed
 #   ./run_dev.sh --shutdown     stop docker compose services + remove volumes
+#
+# Seed users (password "correct horse battery staple"):
+#   founder@fastsaas.local  (owner of org "acme", projects: alpha, beta)
+#   member@fastsaas.local   (member)
+#   viewer@fastsaas.local   (viewer)
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 NO_MIGRATE=0
+CLEAN=0
+SEED=0
 for arg in "$@"; do
   case "$arg" in
     --no-migrate) NO_MIGRATE=1 ;;
+    --seed) SEED=1 ;;
+    --clean)
+      CLEAN=1
+      SEED=1  # --clean implies --seed (otherwise the wipe leaves an unusable empty DB)
+      ;;
     --shutdown)
       echo "[run_dev] tearing down docker compose stack"
       docker compose down -v
@@ -34,6 +48,12 @@ for arg in "$@"; do
   esac
 done
 
+# ─── Wipe (--clean) ─────────────────────────────────────────────────────────
+if [[ "$CLEAN" -eq 1 ]]; then
+  echo "[run_dev] --clean: tearing down stack + removing volumes"
+  docker compose down -v
+fi
+
 # ─── Docker stack ────────────────────────────────────────────────────────────
 echo "[run_dev] bringing up Postgres / Redis / Mailhog"
 docker compose up -d --wait
@@ -42,6 +62,12 @@ docker compose up -d --wait
 if [[ "$NO_MIGRATE" -eq 0 ]]; then
   echo "[run_dev] alembic upgrade head"
   (cd backend && uv run alembic upgrade head)
+fi
+
+# ─── Seed ───────────────────────────────────────────────────────────────────
+if [[ "$SEED" -eq 1 ]]; then
+  echo "[run_dev] loading dev seed"
+  (cd backend && uv run python -m fastsaas.scripts.seed_dev)
 fi
 
 # ─── Process orchestration ───────────────────────────────────────────────────
