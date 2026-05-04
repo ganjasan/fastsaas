@@ -65,14 +65,14 @@ async def tenant_session(session: AsyncSession) -> AsyncIterator[AsyncSession]:
 @pytest.fixture
 async def mailhog() -> AsyncIterator[AsyncClient]:
     """HTTP client to Mailhog (skips test if unreachable). Wipes mailbox on entry + exit."""
-    base = "http://localhost:8025"
+    base = get_settings().mailhog_http_url
     try:
         async with AsyncClient(timeout=1.5) as probe:
             r = await probe.get(f"{base}/api/v2/messages")
             if r.status_code != 200:
                 pytest.skip("Mailhog returned non-200")
     except Exception:
-        pytest.skip("Mailhog is not reachable on localhost:8025")
+        pytest.skip(f"Mailhog is not reachable at {base}")
     async with AsyncClient(base_url=base, timeout=5) as c:
         await c.delete("/api/v1/messages")
         yield c

@@ -1,4 +1,7 @@
 services:
+  # FastSaaS host-port convention: standard service port + 100. Host-only;
+  # container-internal ports are unchanged. Keeps several SaaS-stack projects
+  # coexisting on one workstation.
   postgres:
     image: postgres:16-alpine
     environment:
@@ -6,7 +9,7 @@ services:
       POSTGRES_PASSWORD: dev
       POSTGRES_DB: fastsaas
     ports:
-      - "5432:5432"
+      - "5532:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -19,7 +22,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6479:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -31,8 +34,8 @@ services:
   mailhog:
     image: mailhog/mailhog:latest
     ports:
-      - "1025:1025"   # SMTP
-      - "8025:8025"   # Web UI
+      - "1125:1025"   # SMTP
+      - "8125:8025"   # Web UI
 
 volumes:
   postgres_data:

@@ -33,25 +33,33 @@ class Settings(BaseSettings):
         description="Display name rendered in email subjects, FastAPI title, etc. Override per-deployment to rebrand.",
     )
 
+    # FastSaaS host-port convention: standard service port + 100 (Postgres 5532,
+    # Redis 6479, Mailhog SMTP 1125 / UI 8125, FastAPI 8100, Vite 5273) so the
+    # stack can coexist with other SaaS projects on one workstation.
     database_url: str = Field(
-        default="postgresql+asyncpg://app_user:dev@localhost:5432/fastsaas",
+        default="postgresql+asyncpg://app_user:dev@localhost:5532/fastsaas",
         description="Async Postgres URL used by the FastAPI app (role: app_user, no BYPASSRLS).",
     )
     database_url_migrator: str = Field(
-        default="postgresql+asyncpg://alembic_migrator:dev@localhost:5432/fastsaas",
+        default="postgresql+asyncpg://alembic_migrator:dev@localhost:5532/fastsaas",
         description="Async Postgres URL used by Alembic migrations (role: alembic_migrator, BYPASSRLS).",
     )
 
-    redis_url: str = Field(default="redis://localhost:6379/0")
+    redis_url: str = Field(default="redis://localhost:6479/0")
 
     smtp_host: str = Field(default="localhost")
-    smtp_port: int = Field(default=1025)
+    smtp_port: int = Field(default=1125)
     smtp_user: str = Field(default="")
     smtp_password: str = Field(default="")
     smtp_from: str = Field(default="no-reply@fastsaas.local")
 
+    mailhog_http_url: str = Field(
+        default="http://localhost:8125",
+        description="Mailhog HTTP UI / API base URL used by integration tests to read captured messages.",
+    )
+
     app_url: str = Field(
-        default="http://localhost:5173",
+        default="http://localhost:5273",
         description="Public-facing URL used to render magic-link URLs in emails.",
     )
 

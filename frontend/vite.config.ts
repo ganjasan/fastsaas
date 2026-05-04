@@ -6,8 +6,12 @@ import { defineConfig, loadEnv } from "vite";
 
 // `.env` lives one level up (workspace root); both backend pydantic-settings
 // and Vite read the same file so dev-config drift is impossible.
+//
+// FastSaaS host-port convention: standard service port + 100 (FastAPI 8100,
+// Vite 5273) so the stack coexists with other SaaS-stack projects locally.
 const ENV_DIR = "..";
-const DEFAULT_API = "http://localhost:8000";
+const DEFAULT_API = "http://localhost:8100";
+const DEV_PORT = 5273;
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ENV_DIR, "");
@@ -26,7 +30,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 5173,
+      port: DEV_PORT,
       proxy: {
         // Same-origin proxy keeps the refresh httpOnly cookie working in dev.
         "/api": { target: apiBase, changeOrigin: true },

@@ -1,8 +1,9 @@
 """Jinja2-rendered identity emails delivered via aiosmtplib.
 
 Per design.md §D7: render synchronously from packaged templates, send
-asynchronously. In dev the SMTP host points at Mailhog (`localhost:1025`,
-no auth, plaintext); production swaps host/port + credentials only.
+asynchronously. In dev the SMTP host points at Mailhog (`localhost:1125` —
+FastSaaS uses the +100 host-port shift; no auth, plaintext); production swaps
+host/port + credentials only.
 
 Each `send_*` helper takes the recipient and the *raw* magic-link token
 (NOT the hash); it embeds the token in a URL anchored on `app_url` and
