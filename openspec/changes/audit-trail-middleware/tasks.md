@@ -33,14 +33,16 @@ linked_issue: ganjasan/fastsaas#4
 - [ ] 2.12 `ProjectShareService.revoke` → `record("delete", "share", ...)` + `record("update", "capability", ...)` if a consumed-cap was soft-revoked
 - [ ] 2.13 `authz.service.mint_bundle` / `mint_capability` / `revoke_bundle` / `revoke_capability` — emit `record(..., "capability", ...)` with action and bundle_name in metadata
 
-## 3. ADR-010 amendment
+## 3. Wiegers documentation
 
-- [ ] 3.1 Append "Extension contract for downstream products" section to `requirements/decisions/ADR-010_audit-log-shape.md`:
+- [x] 3.1 **Stakeholder profile** — `requirements/formal/stakeholders/SH-compliance-officer.md` (Wiegers form): goals, authority/responsibilities, tasks, success metrics, pain points, capability-creep risks, GDPR-vs-immortality conflict, downstream coverage-drift mitigation. Pinned `draft` until interviewed.
+- [ ] 3.2 ADR-010 amendment — append "Extension contract for downstream products" section to `requirements/decisions/ADR-010_audit-log-shape.md`:
    - `entity_type` open vocabulary + naming convention.
    - Two write paths: explicit `record(...)` and `AuditedModel` mixin.
    - `actor_var` / `intent_var` contextvars as the canonical handoff.
    - `__audit_redact__` extends global denylist, never replaces it.
-- [ ] 3.2 Update `traces_to:` frontmatter to reference this change.
+   - Reference SH-compliance-officer as the consumer profile this contract serves.
+- [ ] 3.3 Update `traces_to:` frontmatter on ADR-010 to reference this change + the stakeholder profile.
 
 ## 4. Documentation for Claude
 

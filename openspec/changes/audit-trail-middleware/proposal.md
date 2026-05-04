@@ -14,6 +14,8 @@ traces_to:
     - "UC-003 (AGENT provenance via X-Agent-Intent)"
     - "UC-008 (API key rotation auditing)"
     - "UC-010 (org policy denial auditing)"
+  stakeholders:
+    - "[[SH-compliance-officer]]"
 ---
 
 ## Why
