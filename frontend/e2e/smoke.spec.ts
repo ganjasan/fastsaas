@@ -67,10 +67,13 @@ test.describe("multi-tenant smoke", () => {
     const verifyToken = await fetchVerifyTokenFor(request, email);
 
     await page.goto(`/auth/verify-email/${verifyToken}`);
-    // The verify page should land the user on a "verified" success state;
-    // either way the side-effect (email_verified=true) is what we need
-    // before login.
-    await page.waitForLoadState("networkidle");
+    // Wait for the verify mutation to settle — the page transitions from
+    // "Verifying…" to "Email verified" once the side effect commits. We
+    // *need* that commit before login; without it, /auth/login still
+    // 403s with auth.email_unverified.
+    await expect(page.getByRole("heading", { name: /email verified/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // ── Login ───────────────────────────────────────────────────────────
     await page.goto("/auth/login");
@@ -79,8 +82,9 @@ test.describe("multi-tenant smoke", () => {
     await page.getByRole("button", { name: /sign in/i }).click();
 
     // Login SPA-navigates to /orgs; full `page.goto` would reload and
-    // drop the in-memory access token (ADR-008 hybrid storage).
-    await page.waitForURL(/\/orgs\/?$/);
+    // drop the in-memory access token (ADR-008 hybrid storage). 15s
+    // generous timeout — CI runners are slower than local.
+    await page.waitForURL(/\/orgs\/?$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: /welcome to fastsaas/i })).toBeVisible();
 
     // ── Create org ──────────────────────────────────────────────────────
@@ -131,7 +135,7 @@ test.describe("multi-tenant smoke", () => {
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: /sign in/i }).click();
 
-    await page.waitForURL(/\/orgs\/?$/);
+    await page.waitForURL(/\/orgs\/?$/, { timeout: 15_000 });
     await expect(page.getByRole("link", { name: "Acme Co" })).toBeVisible();
   });
 });

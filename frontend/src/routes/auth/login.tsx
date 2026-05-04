@@ -34,8 +34,13 @@ function LoginPage() {
     try {
       const tokens = await login.mutateAsync({ data: values });
       setAccessToken(tokens.access_token);
-      const actor = await meQuery.refetch();
-      if (actor.data) setCurrentActor(actor.data);
+      // Fetch the actor in the background — navigate doesn't depend on it,
+      // and awaiting it has produced flaky e2e where TanStack Query's
+      // queryKey lag against the freshly-set access token kept the
+      // request in flight past the navigate timeout.
+      void meQuery.refetch().then((actor) => {
+        if (actor.data) setCurrentActor(actor.data);
+      });
       // Land directly on /orgs — that's where the workplace lives. Going
       // through "/" first means a full reload (which would drop the
       // in-memory access token per ADR-008 hybrid storage); SPA-navigating
