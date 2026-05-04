@@ -1,7 +1,7 @@
 """Deterministic dev seed.
 
-Loads three verified HUMAN actors (`founder@fastsaas.local`,
-`member@fastsaas.local`, `viewer@fastsaas.local`), one organisation
+Loads three verified HUMAN actors (`founder@example.com`,
+`member@example.com`, `viewer@example.com`), one organisation
 (`acme`), and two projects (`alpha`, `beta`). All seed users share the
 same password so a fresh `./run_dev.sh --clean` lets you log in immediately
 without registering.
@@ -35,9 +35,9 @@ SEED_PASSWORD = "correct horse battery staple"
 
 # (email, display_name, role) — owner is always first.
 SEED_USERS: list[tuple[str, str, OrganisationRole]] = [
-    ("founder@fastsaas.local", "Founder", OrganisationRole.OWNER),
-    ("member@fastsaas.local", "Maker", OrganisationRole.MEMBER),
-    ("viewer@fastsaas.local", "Viewer", OrganisationRole.VIEWER),
+    ("founder@example.com", "Founder", OrganisationRole.OWNER),
+    ("member@example.com", "Maker", OrganisationRole.MEMBER),
+    ("viewer@example.com", "Viewer", OrganisationRole.VIEWER),
 ]
 SEED_ORG_SLUG = "acme"
 SEED_ORG_NAME = "Acme Co"
