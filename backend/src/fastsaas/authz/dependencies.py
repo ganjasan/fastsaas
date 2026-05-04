@@ -61,7 +61,7 @@ def require_capability(
                     ) from exc
 
         cache = get_redis()
-        ok = await can(actor.id, op, rt, resource_id, db=db, cache=cache)
+        ok = await can(actor.actor_id, op, rt, resource_id, db=db, cache=cache)
         if not ok:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,

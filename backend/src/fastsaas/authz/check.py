@@ -77,8 +77,13 @@ async def _load_active_capabilities(
     cache: Redis | None,
 ) -> list[Capability]:
     """Load the actor's capabilities; cache hook is a TODO (see authz/cache.py)."""
-    # Set `app.current_actor` so the `actor_self_read` RLS policy permits the SELECT.
-    await db.execute(text("SET LOCAL app.current_actor = :id"), {"id": str(actor_id)})
+    # Set `app.current_actor` so the `actor_self_read` RLS policy permits
+    # the SELECT. `set_config(..., true)` is the parameter-friendly form of
+    # `SET LOCAL` (placeholders aren't allowed in the literal `SET LOCAL`).
+    await db.execute(
+        text("SELECT set_config('app.current_actor', :id, true)"),
+        {"id": str(actor_id)},
+    )
 
     stmt = select(Capability).where(
         Capability.actor_id == actor_id,

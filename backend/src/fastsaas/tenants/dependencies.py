@@ -96,7 +96,7 @@ async def tenant_context(
     db: SessionDep,
 ) -> TenantContext:
     """Resolve and pin the tenant context for `/orgs/{slug}/...` routes."""
-    resolved = await _resolve_membership(slug=slug, actor_id=actor.id)
+    resolved = await _resolve_membership(slug=slug, actor_id=actor.actor_id)
     if resolved is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -106,10 +106,18 @@ async def tenant_context(
 
     # Pin RLS context on the request session. Both the route and any
     # dependent (e.g. require_capability) use the same session via FastAPI
-    # per-request Depends caching, so SET LOCAL holds for the whole request
-    # transaction.
-    await db.execute(text("SET LOCAL app.current_org = :id"), {"id": str(org.id)})
-    await db.execute(text("SET LOCAL app.current_actor = :id"), {"id": str(actor.id)})
+    # per-request Depends caching, so the LOCAL setting holds for the
+    # whole request transaction. `set_config(..., true)` is the
+    # parameter-friendly equivalent of `SET LOCAL`; Postgres rejects
+    # placeholders in plain `SET LOCAL` syntax.
+    await db.execute(
+        text("SELECT set_config('app.current_org', :id, true)"),
+        {"id": str(org.id)},
+    )
+    await db.execute(
+        text("SELECT set_config('app.current_actor', :id, true)"),
+        {"id": str(actor.actor_id)},
+    )
 
     return TenantContext(org=org, actor=actor, is_guest=is_guest)
 

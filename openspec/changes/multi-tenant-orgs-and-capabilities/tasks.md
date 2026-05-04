@@ -47,19 +47,20 @@ linked_issue: ganjasan/fastsaas#3
 - [x] 4.1 `backend/src/fastsaas/tenants/dependencies.py::tenant_context(slug)` returns `TenantContext(org, actor, is_guest)`; sets `app.current_org` + `app.current_actor` LOCAL on the request session.
 - [x] 4.2 `require_org_member` dependency rejects guests for member-only routes (e.g. members listing).
 - [x] 4.3 Guest path: tolerate missing `organisation_members` row when an active capability with `metadata.org_id = org.id` exists (UC-001).
-- [ ] 4.4 Wire into routers — `Depends(tenant_context)` lands on every `/orgs/{slug}/...` endpoint in phases 5–8.
+- [x] 4.4 Wire into routers — `Depends(tenant_context)` applied to `GET /orgs/{slug}` and `DELETE /orgs/{slug}` in phase 5; further `/orgs/{slug}/...` endpoints in phases 6–8 reuse the same dependency.
 - [x] 4.5 Tests — `tests/test_tenants_context.py` covers: unknown slug → None; member → `is_guest=False`; non-member → None (no info leak); guest with capability → `is_guest=True`; revoked capability ignored; soft-deleted org invisible.
 - [x] 4.6 `db.py` — second engine `migrator_engine` (BYPASSRLS, small pool) + `migrator_session_scope()` for the bootstrap lookup. Disposed alongside the main engine.
 
 ## 5. Org service + endpoints
 
-- [ ] 5.1 `tenants/service.py::OrganisationService.create(name, slug, owner_actor)` — TX: insert org + members + mint `role:owner`
-- [ ] 5.2 `OrganisationService.list_for_actor(actor_id)`
-- [ ] 5.3 `OrganisationService.get_by_slug(slug, actor_id)` — RLS-bypassed lookup gated by membership
-- [ ] 5.4 `OrganisationService.soft_delete(org_id)` — owner-only, sets `deleted_at`, revokes all bundles for the org
-- [ ] 5.5 `api/orgs.py` — POST /orgs, GET /orgs, GET /orgs/{slug}, DELETE /orgs/{slug}
-- [ ] 5.6 Slug validation — regex + reserved-list rejection with `code = "org.slug_reserved"` / `org.slug_invalid`
-- [ ] 5.7 Tests — owner mint, RLS isolation, slug uniqueness, reserved-slug rejection
+- [x] 5.1 `tenants/service.py::OrganisationService.create(name, slug, owner_actor_id)` — single TX: insert org + members row + mint `role:owner` capabilities. Migrator session (BYPASSRLS) so RLS-on-create works.
+- [x] 5.2 `OrganisationService.list_for_actor(actor_id)` — joined SELECT through migrator session; soft-deleted orgs filtered.
+- [x] 5.3 N/A — `get_by_slug` is supplied by `tenant_context` (returns `ctx.org`); endpoint just maps to schema.
+- [x] 5.4 `OrganisationService.soft_delete(org_id, actor_id)` — sets `deleted_at`, mass-revokes `Capability` rows tagged `metadata.org_id = org_id`. Caller must check `can(admin, organisation, org_id)` first.
+- [x] 5.5 `api/orgs.py` — `POST /orgs`, `GET /orgs`, `GET /orgs/{slug}`, `DELETE /orgs/{slug}`. Wired into `main.py`.
+- [x] 5.6 Slug validation — `validate_slug()` raises `SlugError(code='org.slug_invalid'|'org.slug_reserved')`; route maps to HTTP 400. Duplicate slug → HTTP 409 `org.slug_taken` (DB UNIQUE + service-level pre-check).
+- [x] 5.7 Tests — `tests/test_api_orgs.py` (12 integration tests, full pass): create happy path; invalid/reserved/duplicate slug; unverified-email gate; list returns only caller's orgs; empty-state for new user; non-member gets 404 (no leak); soft-deleted org disappears from get and list.
+- [x] 5.8 `OrganisationService.list_projects(org_id)` helper landed for the future ProjectService hook (phase 7).
 
 ## 6. Membership service + endpoints
 

@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from fastsaas import __version__
 from fastsaas.api.auth import router as auth_router
+from fastsaas.api.orgs import router as orgs_router
 from fastsaas.cache import close_redis, get_redis
 from fastsaas.config import get_settings
 from fastsaas.db import close_engine, session_scope
@@ -31,6 +32,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title=get_settings().app_name, version=__version__, lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(orgs_router)
 
 
 @app.get("/health")
