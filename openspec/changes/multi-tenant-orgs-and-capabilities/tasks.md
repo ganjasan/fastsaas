@@ -153,7 +153,7 @@ linked_issue: ganjasan/fastsaas#3
 
 ## 12. Validation + close-out
 
-- [ ] 12.1 `openspec validate multi-tenant-orgs-and-capabilities --strict` passes
-- [ ] 12.2 `requirements/decisions/` — no new ADR (this is implementation of ADR-013); CLAUDE.md mention if any new conventions emerged
-- [ ] 12.3 PR opened, linked to issue #3
-- [ ] 12.4 Archive change after merge; sync delta specs to `openspec/specs/`
+- [x] 12.1 `openspec validate multi-tenant-orgs-and-capabilities --strict` — green.
+- [x] 12.2 No new ADR — this change is the implementation of ADR-013 (capability + role bundles); the bundle-fix on `role:owner`/`role:admin` (`read:organisation` minted explicitly) is captured in the bundle file's comment block. CLAUDE.md untouched: no new global conventions emerged that aren't already documented in the spike's design.md.
+- [ ] 12.3 PR opened, linked to issue #3 — pending user action.
+- [ ] 12.4 Archive change after merge; sync delta specs to `openspec/specs/` — pending user action.
