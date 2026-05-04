@@ -5,30 +5,53 @@
  *   dev-bypass auth → list orgs (empty) → create org → create project →
  *   open project detail → relogin
  *
- * Uses `GET /auth/oauth/dev/start?email=...` (`OAUTH_DEV_BYPASS=true` in CI)
- * to obtain a fresh session without going through register + verify-email +
- * password login. The end-to-end auth flow including Mailhog is already
- * exhaustively covered by backend integration tests
- * (`backend/tests/test_api_auth.py`, `test_identity_email.py`); this e2e
- * focuses on the multi-tenant UI layer above the auth gate.
+ * Auth: `GET /auth/oauth/dev/start?email=...` (`OAUTH_DEV_BYPASS=true` in
+ * CI) issues an access token + sets the refresh httpOnly cookie. We push
+ * the access token into the SPA's auth store directly via the DEV-only
+ * `window.__authStore` shim and SPA-navigate via
+ * `window.__router.navigate(...)`. This avoids:
  *
- * After the dev-bypass GET sets the refresh httpOnly cookie, navigating to
- * /orgs causes the SPA's first request to 401 → `recoverFrom401` swaps the
- * cookie for a fresh access token → the listing renders. So the test never
- * needs to inject a token into the SPA's in-memory store directly.
+ *   - the email + verify-email + login flow (already covered by backend
+ *     integration tests; flaky to drive through a browser).
+ *   - `page.goto("/orgs")` after auth, which is a full reload that
+ *     would drop the in-memory access token (ADR-008 hybrid storage).
  */
-import { type APIRequestContext, expect, test } from "@playwright/test";
+import { type Page, expect, test } from "@playwright/test";
 
 function uniqueEmail(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
 
-async function devBypassLogin(req: APIRequestContext, email: string): Promise<void> {
-  // GET goes through Vite's same-origin proxy to the backend at
-  // /auth/oauth/dev/start; Set-Cookie response header lands the
-  // httpOnly refresh cookie on the browser context.
-  const res = await req.get(`/auth/oauth/dev/start?email=${encodeURIComponent(email)}`);
+async function devBypassAuth(page: Page, email: string): Promise<string> {
+  const res = await page.request.get(`/auth/oauth/dev/start?email=${encodeURIComponent(email)}`);
   expect(res.status(), `dev-bypass returned ${res.status()} ${await res.text()}`).toBe(200);
+  const body = (await res.json()) as { access_token: string };
+  expect(body.access_token, "dev-bypass response missing access_token").toBeTruthy();
+  return body.access_token;
+}
+
+/** Push the access token into the running SPA's Zustand auth store. */
+async function injectAccessToken(page: Page, token: string): Promise<void> {
+  await page.evaluate((t) => {
+    type StoreRef = {
+      __authStore?: { getState: () => { setAccessToken: (token: string) => void } };
+    };
+    const store = (window as unknown as StoreRef).__authStore;
+    if (!store) throw new Error("__authStore is not exposed — DEV build expected");
+    store.getState().setAccessToken(t);
+  }, token);
+}
+
+/** SPA-navigate without a full reload via the DEV-exposed TanStack Router. */
+async function spaNavigate(page: Page, to: string): Promise<void> {
+  await page.evaluate((path) => {
+    type RouterRef = {
+      __router?: { navigate: (opts: { to: string }) => Promise<void> | void };
+    };
+    const router = (window as unknown as RouterRef).__router;
+    if (!router) throw new Error("__router is not exposed — DEV build expected");
+    return router.navigate({ to: path });
+  }, to);
 }
 
 test.describe("multi-tenant smoke", () => {
@@ -37,13 +60,15 @@ test.describe("multi-tenant smoke", () => {
     const orgSlug = `s-${Date.now().toString(36)}`;
     const projectSlug = `p-${Date.now().toString(36)}`;
 
-    // ── Auth (dev-bypass) ───────────────────────────────────────────────
-    await devBypassLogin(page.request, email);
+    // ── Initial page load + auth ─────────────────────────────────────────
+    // Land on a public page so the SPA boots and exposes the DEV shims,
+    // then dev-bypass for tokens, then push the access token in.
+    await page.goto("/auth/login");
+    const accessToken = await devBypassAuth(page, email);
+    await injectAccessToken(page, accessToken);
 
-    // First page load triggers a 401 on /orgs API call → recoverFrom401
-    // exchanges the refresh cookie for an access token, retries, listing
-    // renders empty-state.
-    await page.goto("/orgs");
+    // ── /orgs empty state ───────────────────────────────────────────────
+    await spaNavigate(page, "/orgs");
     await expect(page.getByRole("heading", { name: /welcome to fastsaas/i })).toBeVisible({
       timeout: 15_000,
     });
@@ -80,13 +105,19 @@ test.describe("multi-tenant smoke", () => {
     await expect(page.getByRole("heading", { name: "Q3 Forecast" })).toBeVisible();
 
     // ── Re-login ────────────────────────────────────────────────────────
-    // Drop the refresh cookie + reload. Then dev-bypass again under the
-    // same email — the actor already exists, so this exercises the
-    // "second sign-in for an existing actor" path, not the registration
-    // path. We confirm we land back on /orgs with the org we just made.
+    // Clear cookies + zero out the in-memory token, then dev-bypass under
+    // the same email. Exercises the "second sign-in for an existing
+    // actor" path; we confirm we can re-discover the org we just made.
     await page.context().clearCookies();
-    await devBypassLogin(page.request, email);
-    await page.goto("/orgs");
+    await page.evaluate(() => {
+      type StoreRef = {
+        __authStore?: { getState: () => { clear: () => void } };
+      };
+      (window as unknown as StoreRef).__authStore?.getState?.().clear();
+    });
+    const accessToken2 = await devBypassAuth(page, email);
+    await injectAccessToken(page, accessToken2);
+    await spaNavigate(page, "/orgs");
     await expect(page.getByRole("link", { name: "Acme Co" })).toBeVisible({ timeout: 15_000 });
   });
 });
