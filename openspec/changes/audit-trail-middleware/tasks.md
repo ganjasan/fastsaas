@@ -64,5 +64,5 @@ linked_issue: ganjasan/fastsaas#4
 - [x] 6.1 `openspec validate audit-trail-middleware --strict` passes.
 - [x] 6.2 `cd backend && uv run ruff check .` clean.
 - [x] 6.3 `./run_test.sh -q` green — 190 passed (163 pre-existing + 27 new audit tests).
-- [ ] 6.4 PR opened, linked to issue #4.
+- [x] 6.4 PR opened, linked to issue #4 — https://github.com/ganjasan/fastsaas/pull/12.
 - [ ] 6.5 Archive change after merge; sync delta specs to `openspec/specs/`.
