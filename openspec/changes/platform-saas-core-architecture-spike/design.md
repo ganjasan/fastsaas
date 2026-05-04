@@ -3,6 +3,32 @@ title: Platform SaaS core — design.md (spike)
 status: draft
 linked_issue: the SaaS-core architecture spike
 created: 2026-05-01
+traces_to:
+  epic: the SaaS-core epic
+  related_adr:
+    - ADR-002 # Three independent components (Model · Protocol · Orchestrator)
+    - ADR-004 # Frontend stack
+  produces_adr:
+    - ADR-005
+    - ADR-006
+    - ADR-007
+    - ADR-008
+    - ADR-009
+    - ADR-010
+    - ADR-011
+    - ADR-012
+    - ADR-013
+    - ADR-015
+    - ADR-016
+    - ADR-017
+  use_cases:
+    - UC-001
+    - UC-003
+    - UC-004
+    - UC-005
+    - UC-007
+    - UC-008
+    - UC-010
 ---
 
 # Platform SaaS core — overall architecture design
@@ -394,7 +420,7 @@ backend (FastAPI) ──► /openapi.json (auto)
 // frontend/orval.config.ts
 export default {
  fastsaas: {
- input: 'http://localhost:8000/openapi.json',
+ input: 'http://localhost:8100/openapi.json',  // FastSaaS dev port +100 shift
  output: {
  target: 'src/api/generated/',
  client: 'react-query', // TanStack Query bindings
@@ -613,7 +639,7 @@ After the first 10 decisions were locked, we surfaced 7 use cases (`requirements
 
 These cases expose three gaps:
 
-1. **Hierarchy:** spike assumes 2-level `Org → Project`. UC-002 demands `Org → Department → Project`.
+1. ~~**Hierarchy:** spike assumes 2-level `Org → Project`. UC-002 demands `Org → Department → Project`.~~ **Rejected on 2026-05-03 — see Decision #12 below; hierarchy stays 2-level.**
 2. **Actor types:** ADR-009 has only HUMAN + AGENT. UC-005, UC-007 demand SERVICE.
 3. **Authorization model:** spike loosely mentions "owner / admin / member / viewer roles" but never specifies the underlying mechanism. Per-project guest (UC-001), AGENT-bounded scope (UC-003), policy-on-capabilities (UC-010) cannot be satisfied with pure RBAC.
 
@@ -633,13 +659,13 @@ The following decisions revise/extend Round 1:
 
 - A `capabilities` table holds rows of `(actor_id, operation, resource_type, resource_id, conditions, bundle_name, granted_by, granted_at, expires_at, revoked_at, policy_blocked, metadata)`. Schema in `requirements/reference/access-model-rbac-vs-capability.md` § 4.
 - A capability check is the only authorization mechanism. Code calls `can(actor, op, resource)` → boolean. RLS (per ADR-007) remains the DB-side guarantee; capability is the application-side gate.
-- Default role bundles (`role:owner`, `role:admin`, `role:member`, `role:viewer`, `role:dept_lead`, `role:dept_member`, `role:guest_viewer`, `role:compliance_officer`) defined in code. Assigning a role mints all its capabilities tagged with `bundle_name`. Changing role revokes the old bundle + mints the new.
+- Default role bundles (`role:owner`, `role:admin`, `role:member`, `role:viewer`, `role:guest_viewer`, `role:compliance_officer`) defined in code. Assigning a role mints all its capabilities tagged with `bundle_name`. Changing role revokes the old bundle + mints the new.
 - One-off shares (UC-001 guest, UC-003 AGENT scope) mint capabilities directly without a bundle (or with `bundle_name='role:guest_viewer'` for UI display).
 - Org-wide policies (UC-010) are filters applied at capability **provisioning** AND at runtime check. A capability that violates an active policy is `policy_blocked=true`.
 
 **Operation vocabulary (locked for v1):** `read`, `write`, `delete`, `run` (model execution), `admin` (settings, schema), `share` (grant capabilities to others), `grant` (mint capabilities for AGENTs).
 
-**Resource types (locked for v1):** `organisation`, `department`, `project`, `scenario`, `audit_log`, `agent`, `service`. Wildcard `*` reserved for system roles.
+**Resource types (locked for v1):** `organisation`, `project`, `scenario`, `audit_log`, `agent`, `service`. Wildcard `*` reserved for system roles.
 
 **Audit:** every capability use writes an audit row (per ADR-010) with `intent_metadata.capability_id` referencing the capability that authorised the action.
 
@@ -647,23 +673,31 @@ The following decisions revise/extend Round 1:
 
 ---
 
-### 12. Hierarchy — extend to Org → Department → Project 🟩
+### 12. Hierarchy — extend to Org → Department → Project ❌ REJECTED
 
 **Question:** is two-level (`Org → Project`) sufficient?
 
-**Decision:** **No. Extend to three-level: `Org → Department → Project`.**
+**Decision (revised 2026-05-03):** **Yes. Hierarchy stays two-level — `Org → Project`. The proposed Department entity is rejected.**
 
-**Mechanics:**
+**Rationale for rejection:**
 
-- New table `departments`: `(id, organisation_id, name, description, created_at, deleted_at)`.
-- New table `department_members`: `(department_id, actor_id, role, created_at)` where role ∈ `{dept_lead, dept_member}`.
-- `projects` gains `department_id NOT NULL` (FK to `departments`).
-- For small orgs auto-create a `Default` department on org creation; UI hides department-switching when only one exists.
-- RLS context extended (per updated ADR-007): `SET LOCAL app.current_org` AND `SET LOCAL app.current_department`.
-- Cross-department transfer: `UPDATE projects SET department_id = ? WHERE id = ?` with target dept-lead approval flow.
-- Cross-department guest: capability with `resource_id=project.id` regardless of viewer's dept membership (per UC-002 [A3]).
+- An explicit Department entity multiplies the membership join surface (org_members × dept_members), doubles the RLS context (`app.current_org` + `app.current_department`), and forks every project query on a third hierarchy level for a use case that has not yet emerged from a paying customer.
+- The signal that motivated the proposal (UC-002 — Globex-class enterprise with multiple isolated teams) can be served acceptably without a dedicated entity:
+  - Team-level isolation = a Project per team, with org-level admin / compliance roles spanning them.
+  - Cross-team collaboration = the same per-project guest mechanism used by UC-001.
+  - Cross-team aggregate reporting = org-level read of metadata across projects.
+- If a real customer demand for first-class team isolation surfaces post-launch, the schema can be extended additively (departments table + dept_members + projects.department_id NULL → NOT NULL with backfill). The cost of *not* shipping it now is much lower than the cost of carrying it through every query, every test fixture, and every UI flow.
 
-**Output:** ADR-014 (Hierarchy: Org → Department → Project).
+**Consequences:**
+
+- ADR-014 is **not produced**.
+- ADR-007 is **not amended** for `app.current_department` — RLS context remains `app.current_org` only.
+- ADR-013 role bundles do **not** include `dept_lead`, `dept_member`. Existing org-level bundles plus per-resource grants suffice.
+- UC-002 needs reconsideration without a dedicated Department entity (open backlog item).
+- UC-005 / UC-007 / UC-008 / UC-010 mentions of `dept_*` in alternative flows are stale and need a follow-up cleanup pass.
+- The research note `requirements/reference/access-model-rbac-vs-capability.md` retains its hybrid-vs-RBAC analysis but its UC-002 row is no longer applicable as written.
+
+**Output:** No ADR. This decision is captured in design.md only.
 
 ---
 
@@ -765,7 +799,7 @@ The Round 1 ADR-009 had `agents.api_key_hash` and `services.api_key_hash` (one k
 1. Client: `Authorization: Bearer apz_<type>_<random>`
 2. Auth middleware: format check (regex) → sha256 → Redis cache → DB lookup if miss → load actor.
 3. Set request context: `actor_id`, `api_key_id`, `key_scope`.
-4. Set RLS context (per ADR-007): `app.current_org`, `app.current_department`.
+4. Set RLS context (per ADR-007): `app.current_org`.
 5. Capability check (per Decision #11): `effective = actor.capabilities ∩ key.scope_restriction`.
 6. Audit row carries `intent_metadata.api_key_id` — per-key replay.
 
@@ -775,7 +809,7 @@ A key may carry a strict subset of its actor's capabilities. Effective capabilit
 
 Use cases:
 - HUMAN creates a read-only personal key for a Jupyter notebook.
-- AGENT key restricted to one department (per UC-008 [A2]).
+- AGENT key restricted to a specific project subset (per UC-008 [A2]).
 - SERVICE key with rate-limit restriction.
 
 **Lifecycle:**
@@ -826,8 +860,9 @@ Every action via API key writes audit (per ADR-010) with `intent_metadata.api_ke
 
 These existing ADRs require revision to reflect Round 2 decisions:
 
-- **ADR-007 (RLS):** add `app.current_department` context; add policy describing department isolation; add note that `audit_log` admin reads can be scoped to compliance role.
 - **ADR-009 (actors):** add SERVICE actor type; add `services` child table; add CHECK constraints for parent rules per actor_type.
+
+(The previously-listed ADR-007 amendment for `app.current_department` is dropped — Decision #12 was rejected on 2026-05-03; hierarchy stays `Org → Project`.)
 
 These will be amended (not superseded) — same ADR file, "amended" entry in changelog, status remains Accepted.
 
@@ -838,16 +873,16 @@ These will be amended (not superseded) — same ADR file, "amended" entry in cha
 Round 2 surfaces a more honest access model:
 
 ```
-Hierarchy: Org → Department → Project (was Org → Project)
+Hierarchy: Org → Project (Department extension was proposed and rejected on 2026-05-03)
 Actor types: HUMAN, AGENT, SERVICE (was HUMAN, AGENT)
 Authorization: capabilities + role bundles (was undefined; mentioned roles only)
 Governance: org-wide policies on capabilities
 ```
 
 The 7 sub-issues under #16 in `platform` need acceptance-criteria tweaks. Most relevant:
-- **#2 Bootstrap** — schema includes `capabilities`, `departments`, `department_members`, `services`, `org_policies`.
+- **#2 Bootstrap** — schema includes `capabilities`, `services`, `org_policies`, `api_keys`.
 - **#3 Identity** — capability provisioning at register / accept-invite.
-- **#4 Tenants** — rename to "Multi-tenant hierarchy + access model"; covers departments + capabilities.
+- **#4 Tenants** — rename to "Multi-tenant hierarchy + access model"; covers org-level capabilities and per-project guest pattern.
 - **#5 Audit** — `intent_metadata.capability_id` reference.
 
-Updated ADRs to write post-merge: ADR-013, ADR-014, ADR-015, ADR-016 + amendments to ADR-007 + ADR-009.
+Updated ADRs to write post-merge: ADR-013, ADR-015, ADR-016, ADR-017 + amendment to ADR-009. (ADR-014 / ADR-007 department amendment dropped — see Decision #12.)

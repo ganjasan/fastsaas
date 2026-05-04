@@ -4,6 +4,24 @@ status: in_progress
 linked_issue: the SaaS-core architecture spike
 hub_parent: the SaaS-core epic
 created: 2026-05-01
+traces_to:
+  epic: the SaaS-core epic
+  related_adr:
+    - ADR-002 # Three independent components (Model · Protocol · Orchestrator)
+    - ADR-004 # Frontend stack (React + Vite + TanStack + Radix + Tailwind)
+  produces_adr:
+    - ADR-005 # Async FastAPI + arq workers
+    - ADR-006 # Primary keys and cascade
+    - ADR-007 # Multi-tenant isolation (RLS + app-level WHERE)
+    - ADR-008 # Auth flow
+    - ADR-009 # Actor model (CTI)
+    - ADR-010 # Audit log shape
+    - ADR-011 # Frontend project layout
+    - ADR-012 # UI shadcn + phased design system
+    - ADR-013 # Authorization — capabilities + role bundles
+    - ADR-015 # Actor types — SERVICE addition
+    - ADR-016 # Org policy mechanism
+    - ADR-017 # API keys
 ---
 
 ## Why

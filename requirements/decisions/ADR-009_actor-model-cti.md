@@ -2,14 +2,19 @@
 tags: [decision, status/accepted, category/data-model, priority/high]
 created: 2026-05-01
 decided: 2026-05-01
+amended: 2026-05-01
 supersedes: []
+amended_by: ["ADR-015_actor-types-service", "ADR-017_api-keys"]
 traces_to:
- related:
- - "[[ADR-006_primary-keys-and-cascade]]"
- - "[[ADR-008_auth-flow]]"
- - "[[ADR-010_audit-log-shape]]"
- spike: platform-saas-core-architecture-spike
- epic: the SaaS-core epic
+  related:
+    - "[[ADR-006_primary-keys-and-cascade]]"
+    - "[[ADR-008_auth-flow]]"
+    - "[[ADR-010_audit-log-shape]]"
+    - "[[ADR-013_authorization-capabilities-role-bundles]]"
+    - "[[ADR-015_actor-types-service]]"
+    - "[[ADR-017_api-keys]]"
+  spike: platform-saas-core-architecture-spike
+  epic: the SaaS-core epic
 ---
 
 # ADR-009: Actor model — Class Table Inheritance with users/agents children
@@ -110,9 +115,37 @@ CREATE TABLE agents (
 - AGENT cascade behaviour when parent HUMAN is soft-deleted: cascade soft-delete the AGENT, or keep it usable? Defer to MCP epic.
 - API-key rotation policy for agents. Defer to MCP epic.
 
+## Amendments
+
+### 2026-05-01 — SERVICE actor type added (per ADR-015)
+
+Round 2 (UC-005, UC-007) surfaced an actor shape that does not fit HUMAN or AGENT: an org-owned automation account whose lifecycle must survive the responsible HUMAN's departure. ADR-015 adds `SERVICE` as a third `actor_type` with a `services` child table. Concretely:
+
+- `actor_type_valid` CHECK extended to `('HUMAN', 'AGENT', 'SERVICE')`.
+- New CHECK `service_no_parent CHECK (actor_type <> 'SERVICE' OR parent_actor_id IS NULL)`.
+- New child table `services (actor_id, organisation_id, owner_actor_id, description, last_used_at)` — `owner_actor_id` is accountability only, not lifecycle parent.
+- Default org policy (per ADR-016) prevents SERVICE from holding `admin:*` capabilities.
+
+The full schema delta and rationale live in ADR-015.
+
+### 2026-05-01 — `api_key_hash` removed from `agents` and `services` (per ADR-017)
+
+The original schema in this ADR embedded `agents.api_key_hash TEXT NOT NULL` (and would have done the same for `services`), implying one key per actor. UC-003 [A4], UC-005 [A5], and UC-008 require multiple concurrent keys per actor (rotation grace, multi-device), per-key scope restriction, and per-key audit. ADR-017 introduces a dedicated `api_keys` table; the embedded column is therefore removed:
+
+```sql
+ALTER TABLE agents   DROP COLUMN api_key_hash;
+ALTER TABLE services DROP COLUMN api_key_hash;
+```
+
+(`platform` is pre-launch; no data migration is required. Bootstrap (#2) ships with `api_keys` from day one.)
+
+The full schema and lifecycle live in ADR-017.
+
 ## References
 
 - [[../../openspec/changes/platform-saas-core-architecture-spike/design.md|Spike design.md — Decision #5]]
 - [[ADR-006_primary-keys-and-cascade]]
 - [[ADR-008_auth-flow]]
 - [[ADR-010_audit-log-shape]]
+- [[ADR-015_actor-types-service]] — SERVICE actor type amendment
+- [[ADR-017_api-keys]] — replaces embedded `api_key_hash`

@@ -4,6 +4,26 @@
  * FastSaaS
  * OpenAPI spec version: 0.0.1
  */
+export interface AcceptInviteRequest {
+  /** @minLength 20 */
+  token: string;
+}
+
+export interface AcceptInviteResponse {
+  org_slug: string;
+  role: string;
+}
+
+export interface AcceptShareRequest {
+  /** @minLength 20 */
+  token: string;
+}
+
+export interface AcceptShareResponse {
+  org_slug: string;
+  project_slug: string;
+}
+
 export type ActorType = typeof ActorType[keyof typeof ActorType];
 
 
@@ -28,6 +48,23 @@ export interface HTTPValidationError {
   detail?: ValidationError[];
 }
 
+export interface InviteRequest {
+  email: string;
+  /** Destination role for the invitee. `owner` is rejected. */
+  role?: OrganisationRole;
+}
+
+/**
+ * Returned by POST /orgs/{slug}/members/invite. Doesn't expose the raw
+token — that goes only in the email.
+ */
+export interface InviteResponse {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+}
+
 export interface LoginRequest {
   email: string;
   /** @minLength 1 */
@@ -43,6 +80,72 @@ export interface MagicLinkRequestBody {
   email: string;
 }
 
+export type MemberItemEmail = string | null;
+
+/**
+ * Row of GET /orgs/{slug}/members. Email may be `None` for non-HUMAN
+actors (none ship in v1; future-proofing).
+ */
+export interface MemberItem {
+  actor_id: string;
+  email: MemberItemEmail;
+  display_name: string;
+  role: string;
+  created_at: string;
+}
+
+export interface MembersListResponse {
+  members: MemberItem[];
+  pending: PendingInviteItem[];
+}
+
+export interface OrgCreateRequest {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name: string;
+  /**
+   * @minLength 3
+   * @maxLength 63
+   */
+  slug: string;
+}
+
+/**
+ * Lightweight projection used by `GET /orgs`. Carries the caller's role
+so the org switcher can render badges without a second round-trip.
+ */
+export interface OrgListItem {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+  created_at: string;
+}
+
+export type OrgReadTheme = { [key: string]: unknown };
+
+export interface OrgRead {
+  id: string;
+  name: string;
+  slug: string;
+  theme?: OrgReadTheme;
+  created_at: string;
+}
+
+export type OrganisationRole = typeof OrganisationRole[keyof typeof OrganisationRole];
+
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const OrganisationRole = {
+  owner: 'owner',
+  admin: 'admin',
+  member: 'member',
+  viewer: 'viewer',
+  compliance_officer: 'compliance_officer',
+} as const;
+
 export interface PasswordResetConsumeBody {
   /** @minLength 1 */
   token: string;
@@ -52,6 +155,87 @@ export interface PasswordResetConsumeBody {
 
 export interface PasswordResetRequestBody {
   email: string;
+}
+
+export interface PendingInviteItem {
+  id: string;
+  email: string;
+  role: string;
+  invited_by: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export type ProjectCreateRequestDescription = string | null;
+
+export interface ProjectCreateRequest {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name: string;
+  /**
+   * @minLength 3
+   * @maxLength 63
+   */
+  slug: string;
+  description?: ProjectCreateRequestDescription;
+}
+
+export interface ProjectListItem {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+export type ProjectReadDescription = string | null;
+
+export interface ProjectRead {
+  id: string;
+  name: string;
+  slug: string;
+  description: ProjectReadDescription;
+  created_by: string;
+  created_at: string;
+}
+
+/**
+ * Lighter projection for `GET /projects/{slug}/shares` listings.
+ */
+export interface ProjectShareItem {
+  id: string;
+  email: string;
+  shared_by: string;
+  expires_at: string;
+  created_at: string;
+}
+
+/**
+ * TTL override; default 14, capped at 30.
+ */
+export type ProjectShareRequestTtlDays = number | null;
+
+export interface ProjectShareRequest {
+  email: string;
+  /** TTL override; default 14, capped at 30. */
+  ttl_days?: ProjectShareRequestTtlDays;
+}
+
+export interface ProjectShareResponse {
+  id: string;
+  project_id: string;
+  email: string;
+  expires_at: string;
+}
+
+export type ProjectUpdateRequestName = string | null;
+
+export type ProjectUpdateRequestDescription = string | null;
+
+export interface ProjectUpdateRequest {
+  name?: ProjectUpdateRequestName;
+  description?: ProjectUpdateRequestDescription;
 }
 
 export interface RegisterRequest {
@@ -64,6 +248,10 @@ export interface RegisterResponse {
   actor_id: string;
   email: string;
   email_verified: boolean;
+}
+
+export interface RoleChangeRequest {
+  role: OrganisationRole;
 }
 
 export interface TokensResponse {

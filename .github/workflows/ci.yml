@@ -148,6 +148,9 @@ jobs:
       SMTP_HOST: localhost
       SMTP_PORT: 1025
       VITE_API_BASE_URL: http://localhost:8000
+      # E2E uses GET /auth/oauth/dev/start to skip register+verify+login;
+      # Mailhog flow is already covered by backend integration tests.
+      OAUTH_DEV_BYPASS: "true"
 
     steps:
       - uses: actions/checkout@v4

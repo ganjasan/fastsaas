@@ -25,7 +25,7 @@ linked_issue: the SaaS-core architecture spike
 After Round 1, surfaced UC-001..UC-010 (8 use cases) that exposed gaps:
 
 - [x] **Decision 11: Authorization model** → **Hybrid — capabilities as primitive + role bundles as presentation**. Output: ADR-013 (post-merge).
-- [x] **Decision 12: Hierarchy extension** → **Org → Department → Project (3-level)**. Output: ADR-014 (post-merge).
+- [x] **Decision 12: Hierarchy extension** → ❌ **Rejected (2026-05-03)**. Hierarchy stays `Org → Project`; UC-002-class signals to be served by per-project access + org-level admin/compliance roles. No ADR produced. Captured in design.md.
 - [x] **Decision 13: Actor types** → **add SERVICE** (HUMAN + AGENT + SERVICE). Output: ADR-015 (post-merge).
 - [x] **Decision 14: Org policy mechanism** → **declarative rules limiting AGENT/SERVICE capabilities**, with audit + override. Output: ADR-016 (post-merge).
 - [x] **Decision 15: API Keys** → **separate `api_keys` table; multiple keys per actor; per-key scope restriction; soft-revoke; rotation grace period**. Output: ADR-017 (post-merge) + further amendment to ADR-009 (remove `api_key_hash` from `agents`/`services`).
@@ -52,17 +52,20 @@ After Round 1, surfaced UC-001..UC-010 (8 use cases) that exposed gaps:
 - [x] `platform/CLAUDE.md` aligned with Round 1 stack (PR #1 merged).
 
 ### Round 2 ADRs (to write)
-- [ ] ADR-013 — Authorization model (capabilities + role bundles).
-- [ ] ADR-014 — Hierarchy: Org → Department → Project (3-level).
-- [ ] ADR-015 — Actor types: SERVICE addition.
-- [ ] ADR-016 — Org policy mechanism.
-- [ ] ADR-017 — API Keys (separate table, multi-key per actor, per-key scope, lifecycle).
-- [ ] **Amend** ADR-007 — add `app.current_department` RLS context + compliance role audit access.
-- [ ] **Amend** ADR-009 — (1) add `actor_type=SERVICE`; `services` child table; CHECK constraint update; (2) **remove `api_key_hash` from `agents` and `services`** — superseded by `api_keys` table per ADR-017.
+- [x] ADR-013 — Authorization model (capabilities + role bundles).
+- [x] ❌ ADR-014 — Hierarchy: Org → Department → Project (3-level). **Decision #12 rejected on 2026-05-03; no ADR produced.**
+- [x] ADR-015 — Actor types: SERVICE addition.
+- [x] ADR-016 — Org policy mechanism.
+- [x] ADR-017 — API Keys (separate table, multi-key per actor, per-key scope, lifecycle).
+- [x] ❌ **Amend** ADR-007 — `app.current_department` RLS context. **Dropped — Decision #12 rejected.** (Compliance role audit access covered by ADR-013 capability gate; no ADR-007 amendment needed.)
+- [x] **Amend** ADR-009 — (1) add `actor_type=SERVICE`; `services` child table; CHECK constraint update; (2) **remove `api_key_hash` from `agents` and `services`** — superseded by `api_keys` table per ADR-017.
+
+### Round 2 follow-up ADRs (port from downstream identity-and-auth implementation)
+- [x] ADR-018 — JWT + OAuth library (joserfc + Authlib) — ported from identity-and-auth implementation.
 
 ### Open-questions cleanup
-- [ ] Update / close affected files in `fastsaas/requirements/open-questions/` (`Resource Limits.md` and any others touched).
-- [ ] Backfill `traces_to:` frontmatter in this change → epic #16, ADR-004, ADR-002.
+- [x] N/A — `requirements/open-questions/` directory does not exist in this repo (cleared during port from downstream Apilize fork). Nothing to update.
+- [x] Backfill `traces_to:` frontmatter in this change → epic, ADR-004, ADR-002. (Added to `proposal.md` and `design.md`.)
 
 ## Phase 3 — Verify
 
@@ -72,22 +75,22 @@ After Round 1, surfaced UC-001..UC-010 (8 use cases) that exposed gaps:
 
 ### Round 2
 - [x] Decisions 11–15 show 🟩 in `design.md`.
-- [ ] Sub-issues #2..#8 acceptance criteria updated to reflect Round 2 (capabilities, departments, SERVICE actor, policies, API keys).
- - [ ] #2 Bootstrap — schema includes `capabilities`, `departments`, `department_members`, `services`, `org_policies`, **`api_keys`**.
- - [ ] #3 Identity — capability provisioning at register / accept-invite; **API key creation/management endpoints + UI**.
- - [ ] #4 Tenants — rename to "Multi-tenant hierarchy + access model"; add departments + capabilities + per-project guest membership.
- - [ ] #5 Audit — `intent_metadata.capability_id` and **`intent_metadata.api_key_id`** reference.
- - [ ] #6 UI — admin pages show roles (presentational); **API keys list + revoke UI**; capability detail Phase 2.
- - [ ] #7 Observability — capability check failures + **API key reuse-after-revocation** monitored.
- - [ ] #8 E2E — verify per-project guest, AGENT scope, department isolation, **API key flow (create + use + revoke)**.
+- [x] N/A — Sub-issues #2..#8 acceptance-criteria updates apply to the downstream `platform` repo, not `fastsaas`. The mapping is preserved here for the future `platform/` carry-over:
+ - [ ] (downstream) #2 Bootstrap — schema includes `capabilities`, `services`, `org_policies`, **`api_keys`**.
+ - [ ] (downstream) #3 Identity — capability provisioning at register / accept-invite; **API key creation/management endpoints + UI**.
+ - [ ] (downstream) #4 Tenants — rename to "Multi-tenant hierarchy + access model"; add capabilities + per-project guest membership.
+ - [ ] (downstream) #5 Audit — `intent_metadata.capability_id` and **`intent_metadata.api_key_id`** reference.
+ - [ ] (downstream) #6 UI — admin pages show roles (presentational); **API keys list + revoke UI**; capability detail Phase 2.
+ - [ ] (downstream) #7 Observability — capability check failures + **API key reuse-after-revocation** monitored.
+ - [ ] (downstream) #8 E2E — verify per-project guest, AGENT scope, **API key flow (create + use + revoke)**.
 
 ### Common
-- [ ] Spike issue #17 acceptance criteria all checked.
-- [ ] `/dd:openspec-verify` passes against this change.
+- [x] N/A — Spike issue #17 lived in the downstream `platform` repo; not tracked here. Re-link to a FASTSAAS-owned tracker once established (per `.openspec.yaml` note).
+- [x] `openspec validate --strict` — N/A for `type: spike`. The CLI requires at least one behavioral delta in `specs/`; this spike intentionally produces ADRs only (no behavioural change), so strict validation is not applicable. Manual review of artefacts (proposal/design/tasks/ADRs) substitutes per Drydock spike convention.
 
 ## Phase 4 — Ship
 
-- [ ] PR opened from `spike/17-platform-saas-core-architecture` → `main`.
-- [ ] Archive change after PR approval (per Drydock convention: archive in same PR as merge).
-- [ ] Sync delta specs to `openspec/specs/` — likely none for a spike (no behavioral change).
-- [ ] Close issue #17.
+- [x] N/A — Code already on `main` via PRs #8 (planning port) and #9 (identity-and-auth code port). No further branch/PR for this spike.
+- [ ] Archive change after final verify (per Drydock convention).
+- [x] Sync delta specs to `openspec/specs/` — none required for a spike (no behavioral change; specs/ is empty by design).
+- [x] N/A — Downstream issue #17 closure is owned by the originating repo, not this fork.

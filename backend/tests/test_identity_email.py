@@ -1,8 +1,9 @@
 """Identity email rendering + SMTP delivery, asserted via Mailhog HTTP API.
 
-Mailhog runs in docker-compose (SMTP :1025, HTTP :8025). The fixture flushes
-its message store at start so each test sees only its own send. Skips when
-Mailhog isn't reachable so unit-only environments still pass.
+Mailhog runs in docker-compose. The fixture flushes its message store at start
+so each test sees only its own send. Skips when Mailhog isn't reachable so
+unit-only environments still pass. URLs come from settings (FastSaaS uses the
++100 host-port shift, so Mailhog SMTP is :1125 and HTTP UI :8125 by default).
 """
 
 from __future__ import annotations
@@ -20,13 +21,11 @@ from fastsaas.identity.email import (
     send_verification,
 )
 
-MAILHOG_HTTP = "http://localhost:8025"
 
-
-async def _mailhog_reachable() -> bool:
+async def _mailhog_reachable(base: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=1.5) as c:
-            r = await c.get(f"{MAILHOG_HTTP}/api/v2/messages")
+            r = await c.get(f"{base}/api/v2/messages")
             return r.status_code == 200
     except (httpx.ConnectError, httpx.ReadError, httpx.TimeoutException):
         return False
@@ -34,9 +33,10 @@ async def _mailhog_reachable() -> bool:
 
 @pytest.fixture
 async def mailhog() -> AsyncIterator[httpx.AsyncClient]:
-    if not await _mailhog_reachable():
-        pytest.skip("Mailhog is not reachable on localhost:8025")
-    async with httpx.AsyncClient(base_url=MAILHOG_HTTP, timeout=5) as c:
+    base = get_settings().mailhog_http_url
+    if not await _mailhog_reachable(base):
+        pytest.skip(f"Mailhog is not reachable at {base}")
+    async with httpx.AsyncClient(base_url=base, timeout=5) as c:
         await c.delete("/api/v1/messages")
         yield c
         await c.delete("/api/v1/messages")

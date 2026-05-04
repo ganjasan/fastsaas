@@ -8,13 +8,30 @@ Built around an **Actor-Centric identity model** (HUMAN / AGENT / SERVICE), stri
 
 ```bash
 cp .env.example .env            # defaults work out of the box
-make dev                        # docker compose up: Postgres / Redis / Mailhog
+./run_dev.sh                    # docker compose up: Postgres / Redis / Mailhog
 make migrate                    # alembic upgrade head
-make -C backend dev             # uvicorn on :8000
-make -C frontend dev            # vite on :5173
+cd backend && uv run uvicorn fastsaas.main:app --reload --port 8100   # backend
+cd frontend && npm run dev                                            # frontend (vite on :5273)
 ```
 
-Open `http://localhost:5173`. Register, click the verification link from Mailhog (http://localhost:8025), sign in — `make dev` to logged-in `/auth/me` in well under 15 minutes on a fresh clone.
+Open `http://localhost:5273`. Register, click the verification link from Mailhog (http://localhost:8125), sign in — fresh clone to logged-in `/auth/me` in well under 15 minutes.
+
+### Host-port convention
+
+FastSaaS shifts every host-side port by a fixed offset so multiple SaaS-stack projects coexist locally. Container-internal ports are unchanged.
+
+| | standard | **dev** (`+100`) | **test** (`+200`) |
+|---|---|---|---|
+| Postgres | 5432 | 5532 | 5632 |
+| Redis | 6379 | 6479 | 6579 |
+| Mailhog SMTP / UI | 1025 / 8025 | 1125 / 8125 | 1225 / 8225 |
+| FastAPI | 8000 | 8100 | — |
+| Vite | 5173 | 5273 | — |
+
+- `./run_dev.sh` — dev stack (`docker-compose.yml`, project `fastsaas`).
+- `./run_test.sh [pytest args]` — isolated test stack (`docker-compose.test.yml`, project `fastsaas-test`, own volumes), applies migrations and runs pytest. Add `--keep-stack` or `KEEP_STACK=1` to leave the stack running after the run.
+
+CI uses standard ports — clean runners have nothing to conflict with.
 
 ## Repo layout
 
@@ -31,7 +48,7 @@ Open `http://localhost:5173`. Register, click the verification link from Mailhog
 
 Sign-in works the same in dev as in prod — only the toolchain you can poke at differs.
 
-- **Mailhog** captures every outbound email at `http://localhost:8025`. Verification, magic-link, and password-reset messages land there; the link in the body is the same one a prod user would see.
+- **Mailhog** captures every outbound email at `http://localhost:8125`. Verification, magic-link, and password-reset messages land there; the link in the body is the same one a prod user would see.
 - **Dev OAuth bypass** — set `OAUTH_DEV_BYPASS=true` in `.env` and the backend exposes `GET /auth/oauth/dev/start?email=<addr>` which skips the provider round-trip and signs you in directly. Returns 404 when the env is unset.
 - **JWT dev keypair** — `infra/dev-secrets/jwt/dev-1.{pem,pub.pem}` is committed as a DEV-ONLY keypair so a clean clone reaches a logged-in `/auth/me` without further setup. Regenerate with `make gen-jwt-keys`. Production rotation: see [`docs/runbooks/rotate-jwt-keys.md`](docs/runbooks/rotate-jwt-keys.md).
 - **Refresh-token rotation** is server-side — refresh families live in Redis (`refresh:fam:<uuid>` hashes). Tests use db 15 with `FLUSHDB`.
