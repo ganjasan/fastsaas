@@ -36,7 +36,11 @@ function LoginPage() {
       setAccessToken(tokens.access_token);
       const actor = await meQuery.refetch();
       if (actor.data) setCurrentActor(actor.data);
-      await navigate({ to: "/" });
+      // Land directly on /orgs — that's where the workplace lives. Going
+      // through "/" first means a full reload (which would drop the
+      // in-memory access token per ADR-008 hybrid storage); SPA-navigating
+      // straight to /orgs keeps the session in memory.
+      await navigate({ to: "/orgs" });
     } catch (e) {
       const code = (e as ApiError | undefined)?.body
         ? ((e as ApiError).body as { detail?: { code?: string } })?.detail?.code

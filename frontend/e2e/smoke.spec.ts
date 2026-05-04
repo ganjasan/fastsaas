@@ -78,9 +78,9 @@ test.describe("multi-tenant smoke", () => {
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: /sign in/i }).click();
 
-    // Logged-in users land on the root, which a fresh user redirects
-    // through to /orgs (empty-state CTA).
-    await page.goto("/orgs");
+    // Login SPA-navigates to /orgs; full `page.goto` would reload and
+    // drop the in-memory access token (ADR-008 hybrid storage).
+    await page.waitForURL(/\/orgs\/?$/);
     await expect(page.getByRole("heading", { name: /welcome to fastsaas/i })).toBeVisible();
 
     // ── Create org ──────────────────────────────────────────────────────
@@ -131,7 +131,7 @@ test.describe("multi-tenant smoke", () => {
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: /sign in/i }).click();
 
-    await page.goto("/orgs");
+    await page.waitForURL(/\/orgs\/?$/);
     await expect(page.getByRole("link", { name: "Acme Co" })).toBeVisible();
   });
 });
