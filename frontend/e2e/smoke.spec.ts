@@ -84,10 +84,17 @@ test.describe("multi-tenant smoke", () => {
     await page.getByRole("button", { name: /create organisation/i }).click();
 
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}$`), { timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: "Acme Co" })).toBeVisible();
+    // New Overview page (Render-style chrome): H1 says "Overview", the org
+    // name appears in the sidebar workspace switcher instead.
+    await expect(page.getByRole("heading", { name: /^overview$/i })).toBeVisible();
 
     // ── Create project ──────────────────────────────────────────────────
-    await page.getByRole("link", { name: /open projects/i }).click();
+    // Navigate via the sidebar nav link (replaces the old "Open projects"
+    // quick-link card on the Overview).
+    await page
+      .getByRole("link", { name: /^projects$/i })
+      .first()
+      .click();
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}/projects$`));
 
     await page
