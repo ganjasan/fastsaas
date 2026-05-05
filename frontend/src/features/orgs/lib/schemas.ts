@@ -18,9 +18,12 @@ export const createOrgSchema = z.object({
 });
 export type CreateOrgInput = z.infer<typeof createOrgSchema>;
 
+// Operational roles only. Compliance roles (`compliance_officer`, `dpo`) are
+// specialised — read-audit cross-org and GDPR scrub respectively. They get
+// their own assignment surface (issue #32); not exposed in the Members invite UI.
 export const inviteMemberSchema = z.object({
   email: z.string().email("Enter a valid email"),
-  role: z.enum(["admin", "member", "viewer", "compliance_officer"]),
+  role: z.enum(["admin", "member", "viewer"]),
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
 
