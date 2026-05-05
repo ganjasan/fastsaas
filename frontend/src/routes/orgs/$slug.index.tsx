@@ -1,17 +1,14 @@
 /**
- * /orgs/$slug — overview shell. Pins the slug into the org store on mount
- * (so subsequent API calls carry X-Org). Surfaces tabs/links to projects
- * and member admin.
+ * /orgs/$slug — overview page. Wrapped by `$slug.tsx` (AppShell layout),
+ * which also handles pinning the slug into the org store, so this page
+ * focuses on its own content.
  */
 import { Link, createFileRoute, useParams } from "@tanstack/react-router";
-import { useEffect } from "react";
 
 import { useGetOrgOrgsSlugGet } from "@/api/generated/orgs/orgs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OrgSwitcher } from "@/features/orgs/components/OrgSwitcher";
-import { useOrgStore } from "@/features/orgs/lib/orgStore";
 
 export const Route = createFileRoute("/orgs/$slug/")({
   component: OrgOverviewPage,
@@ -19,24 +16,15 @@ export const Route = createFileRoute("/orgs/$slug/")({
 
 function OrgOverviewPage() {
   const { slug } = useParams({ from: "/orgs/$slug/" });
-  const setSlug = useOrgStore((s) => s.setCurrentOrgSlug);
-
-  useEffect(() => {
-    setSlug(slug);
-  }, [slug, setSlug]);
-
   const { data, isLoading, error } = useGetOrgOrgsSlugGet(slug);
 
   return (
-    <main className="mx-auto max-w-4xl p-6">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {data?.name ?? <Skeleton className="h-7 w-40" />}
-          </h1>
-          <p className="text-sm text-muted-foreground">{slug}</p>
-        </div>
-        <OrgSwitcher />
+    <div className="mx-auto max-w-4xl">
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {data?.name ?? <Skeleton className="h-7 w-40" />}
+        </h1>
+        <p className="text-sm text-muted-foreground">{slug}</p>
       </header>
 
       {error ? (
@@ -73,6 +61,6 @@ function OrgOverviewPage() {
           </Card>
         </div>
       )}
-    </main>
+    </div>
   );
 }

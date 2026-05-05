@@ -5,7 +5,7 @@
  */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, createFileRoute, useParams } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import {
@@ -27,8 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { OrgSwitcher } from "@/features/orgs/components/OrgSwitcher";
-import { useOrgStore } from "@/features/orgs/lib/orgStore";
 import { type CreateProjectInput, createProjectSchema } from "@/features/orgs/lib/schemas";
 import type { ApiError } from "@/lib/api/client";
 
@@ -38,30 +36,23 @@ export const Route = createFileRoute("/orgs/$slug/projects/")({
 
 function ProjectsIndexPage() {
   const { slug } = useParams({ from: "/orgs/$slug/projects/" });
-  const setSlug = useOrgStore((s) => s.setCurrentOrgSlug);
-  useEffect(() => {
-    setSlug(slug);
-  }, [slug, setSlug]);
 
   const { data, isLoading, refetch } = useListProjectsOrgsSlugProjectsGet(slug);
   const [open, setOpen] = useState(false);
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
           <p className="text-sm text-muted-foreground">{slug}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <OrgSwitcher />
-          <CreateProjectDialog
-            slug={slug}
-            open={open}
-            onOpenChange={setOpen}
-            onCreated={() => refetch()}
-          />
-        </div>
+        <CreateProjectDialog
+          slug={slug}
+          open={open}
+          onOpenChange={setOpen}
+          onCreated={() => refetch()}
+        />
       </header>
 
       {isLoading ? (
@@ -96,7 +87,7 @@ function ProjectsIndexPage() {
           ))}
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

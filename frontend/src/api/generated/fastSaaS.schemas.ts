@@ -134,6 +134,17 @@ export interface OrgRead {
   created_at: string;
 }
 
+export type OrgThemeUpdateRequestModeDefault = ThemeModeDefault | null;
+
+/**
+ * Body for `PATCH /orgs/{slug}/theme`. Replaces (not merges) the
+persisted `organisations.theme` JSONB.
+ */
+export interface OrgThemeUpdateRequest {
+  preset: ThemePreset;
+  mode_default?: OrgThemeUpdateRequestModeDefault;
+}
+
 export type OrganisationRole = typeof OrganisationRole[keyof typeof OrganisationRole];
 
 
@@ -259,6 +270,32 @@ export interface ScrubResult {
   rows_scrubbed: number;
   dry_run: boolean;
 }
+
+export type ThemeModeDefault = typeof ThemeModeDefault[keyof typeof ThemeModeDefault];
+
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ThemeModeDefault = {
+  light: 'light',
+  dark: 'dark',
+  system: 'system',
+} as const;
+
+/**
+ * Phase 1 preset enum per ADR-012. Phase 2 will add a free-form theme
+editor; until then the wire contract is one of these five values.
+ */
+export type ThemePreset = typeof ThemePreset[keyof typeof ThemePreset];
+
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ThemePreset = {
+  default: 'default',
+  modern: 'modern',
+  corporate: 'corporate',
+  dark: 'dark',
+  'high-contrast': 'high-contrast',
+} as const;
 
 export interface TokensResponse {
   access_token: string;

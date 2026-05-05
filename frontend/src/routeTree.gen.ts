@@ -12,16 +12,19 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OrgsIndexRouteImport } from './routes/orgs/index'
 import { Route as OrgsNewRouteImport } from './routes/orgs/new'
+import { Route as OrgsSlugRouteImport } from './routes/orgs/$slug'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as OrgsSlugIndexRouteImport } from './routes/orgs/$slug.index'
 import { Route as OrgsAcceptShareTokenRouteImport } from './routes/orgs/accept-share.$token'
 import { Route as OrgsAcceptInviteTokenRouteImport } from './routes/orgs/accept-invite.$token'
+import { Route as OrgsSlugSettingsRouteImport } from './routes/orgs/$slug.settings'
 import { Route as AuthVerifyEmailTokenRouteImport } from './routes/auth/verify-email.$token'
 import { Route as AuthResetPasswordTokenRouteImport } from './routes/auth/reset-password.$token'
 import { Route as AuthMagicLinkTokenRouteImport } from './routes/auth/magic-link.$token'
 import { Route as OrgsSlugProjectsIndexRouteImport } from './routes/orgs/$slug.projects.index'
 import { Route as OrgsSlugSettingsMembersRouteImport } from './routes/orgs/$slug.settings.members'
+import { Route as OrgsSlugSettingsBrandingRouteImport } from './routes/orgs/$slug.settings.branding'
 import { Route as OrgsSlugProjectsProjectSlugRouteImport } from './routes/orgs/$slug.projects.$projectSlug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -39,6 +42,11 @@ const OrgsNewRoute = OrgsNewRouteImport.update({
   path: '/orgs/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrgsSlugRoute = OrgsSlugRouteImport.update({
+  id: '/orgs/$slug',
+  path: '/orgs/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
   id: '/auth/register',
   path: '/auth/register',
@@ -50,9 +58,9 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrgsSlugIndexRoute = OrgsSlugIndexRouteImport.update({
-  id: '/orgs/$slug/',
-  path: '/orgs/$slug/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => OrgsSlugRoute,
 } as any)
 const OrgsAcceptShareTokenRoute = OrgsAcceptShareTokenRouteImport.update({
   id: '/orgs/accept-share/$token',
@@ -63,6 +71,11 @@ const OrgsAcceptInviteTokenRoute = OrgsAcceptInviteTokenRouteImport.update({
   id: '/orgs/accept-invite/$token',
   path: '/orgs/accept-invite/$token',
   getParentRoute: () => rootRouteImport,
+} as any)
+const OrgsSlugSettingsRoute = OrgsSlugSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => OrgsSlugRoute,
 } as any)
 const AuthVerifyEmailTokenRoute = AuthVerifyEmailTokenRouteImport.update({
   id: '/auth/verify-email/$token',
@@ -80,35 +93,44 @@ const AuthMagicLinkTokenRoute = AuthMagicLinkTokenRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrgsSlugProjectsIndexRoute = OrgsSlugProjectsIndexRouteImport.update({
-  id: '/orgs/$slug/projects/',
-  path: '/orgs/$slug/projects/',
-  getParentRoute: () => rootRouteImport,
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => OrgsSlugRoute,
 } as any)
 const OrgsSlugSettingsMembersRoute = OrgsSlugSettingsMembersRouteImport.update({
-  id: '/orgs/$slug/settings/members',
-  path: '/orgs/$slug/settings/members',
-  getParentRoute: () => rootRouteImport,
+  id: '/members',
+  path: '/members',
+  getParentRoute: () => OrgsSlugSettingsRoute,
 } as any)
+const OrgsSlugSettingsBrandingRoute =
+  OrgsSlugSettingsBrandingRouteImport.update({
+    id: '/branding',
+    path: '/branding',
+    getParentRoute: () => OrgsSlugSettingsRoute,
+  } as any)
 const OrgsSlugProjectsProjectSlugRoute =
   OrgsSlugProjectsProjectSlugRouteImport.update({
-    id: '/orgs/$slug/projects/$projectSlug',
-    path: '/orgs/$slug/projects/$projectSlug',
-    getParentRoute: () => rootRouteImport,
+    id: '/projects/$projectSlug',
+    path: '/projects/$projectSlug',
+    getParentRoute: () => OrgsSlugRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/orgs/$slug': typeof OrgsSlugRouteWithChildren
   '/orgs/new': typeof OrgsNewRoute
   '/orgs/': typeof OrgsIndexRoute
   '/auth/magic-link/$token': typeof AuthMagicLinkTokenRoute
   '/auth/reset-password/$token': typeof AuthResetPasswordTokenRoute
   '/auth/verify-email/$token': typeof AuthVerifyEmailTokenRoute
+  '/orgs/$slug/settings': typeof OrgsSlugSettingsRouteWithChildren
   '/orgs/accept-invite/$token': typeof OrgsAcceptInviteTokenRoute
   '/orgs/accept-share/$token': typeof OrgsAcceptShareTokenRoute
   '/orgs/$slug/': typeof OrgsSlugIndexRoute
   '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugRoute
+  '/orgs/$slug/settings/branding': typeof OrgsSlugSettingsBrandingRoute
   '/orgs/$slug/settings/members': typeof OrgsSlugSettingsMembersRoute
   '/orgs/$slug/projects/': typeof OrgsSlugProjectsIndexRoute
 }
@@ -121,10 +143,12 @@ export interface FileRoutesByTo {
   '/auth/magic-link/$token': typeof AuthMagicLinkTokenRoute
   '/auth/reset-password/$token': typeof AuthResetPasswordTokenRoute
   '/auth/verify-email/$token': typeof AuthVerifyEmailTokenRoute
+  '/orgs/$slug/settings': typeof OrgsSlugSettingsRouteWithChildren
   '/orgs/accept-invite/$token': typeof OrgsAcceptInviteTokenRoute
   '/orgs/accept-share/$token': typeof OrgsAcceptShareTokenRoute
   '/orgs/$slug': typeof OrgsSlugIndexRoute
   '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugRoute
+  '/orgs/$slug/settings/branding': typeof OrgsSlugSettingsBrandingRoute
   '/orgs/$slug/settings/members': typeof OrgsSlugSettingsMembersRoute
   '/orgs/$slug/projects': typeof OrgsSlugProjectsIndexRoute
 }
@@ -133,15 +157,18 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/orgs/$slug': typeof OrgsSlugRouteWithChildren
   '/orgs/new': typeof OrgsNewRoute
   '/orgs/': typeof OrgsIndexRoute
   '/auth/magic-link/$token': typeof AuthMagicLinkTokenRoute
   '/auth/reset-password/$token': typeof AuthResetPasswordTokenRoute
   '/auth/verify-email/$token': typeof AuthVerifyEmailTokenRoute
+  '/orgs/$slug/settings': typeof OrgsSlugSettingsRouteWithChildren
   '/orgs/accept-invite/$token': typeof OrgsAcceptInviteTokenRoute
   '/orgs/accept-share/$token': typeof OrgsAcceptShareTokenRoute
   '/orgs/$slug/': typeof OrgsSlugIndexRoute
   '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugRoute
+  '/orgs/$slug/settings/branding': typeof OrgsSlugSettingsBrandingRoute
   '/orgs/$slug/settings/members': typeof OrgsSlugSettingsMembersRoute
   '/orgs/$slug/projects/': typeof OrgsSlugProjectsIndexRoute
 }
@@ -151,15 +178,18 @@ export interface FileRouteTypes {
     | '/'
     | '/auth/login'
     | '/auth/register'
+    | '/orgs/$slug'
     | '/orgs/new'
     | '/orgs/'
     | '/auth/magic-link/$token'
     | '/auth/reset-password/$token'
     | '/auth/verify-email/$token'
+    | '/orgs/$slug/settings'
     | '/orgs/accept-invite/$token'
     | '/orgs/accept-share/$token'
     | '/orgs/$slug/'
     | '/orgs/$slug/projects/$projectSlug'
+    | '/orgs/$slug/settings/branding'
     | '/orgs/$slug/settings/members'
     | '/orgs/$slug/projects/'
   fileRoutesByTo: FileRoutesByTo
@@ -172,10 +202,12 @@ export interface FileRouteTypes {
     | '/auth/magic-link/$token'
     | '/auth/reset-password/$token'
     | '/auth/verify-email/$token'
+    | '/orgs/$slug/settings'
     | '/orgs/accept-invite/$token'
     | '/orgs/accept-share/$token'
     | '/orgs/$slug'
     | '/orgs/$slug/projects/$projectSlug'
+    | '/orgs/$slug/settings/branding'
     | '/orgs/$slug/settings/members'
     | '/orgs/$slug/projects'
   id:
@@ -183,15 +215,18 @@ export interface FileRouteTypes {
     | '/'
     | '/auth/login'
     | '/auth/register'
+    | '/orgs/$slug'
     | '/orgs/new'
     | '/orgs/'
     | '/auth/magic-link/$token'
     | '/auth/reset-password/$token'
     | '/auth/verify-email/$token'
+    | '/orgs/$slug/settings'
     | '/orgs/accept-invite/$token'
     | '/orgs/accept-share/$token'
     | '/orgs/$slug/'
     | '/orgs/$slug/projects/$projectSlug'
+    | '/orgs/$slug/settings/branding'
     | '/orgs/$slug/settings/members'
     | '/orgs/$slug/projects/'
   fileRoutesById: FileRoutesById
@@ -200,6 +235,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
+  OrgsSlugRoute: typeof OrgsSlugRouteWithChildren
   OrgsNewRoute: typeof OrgsNewRoute
   OrgsIndexRoute: typeof OrgsIndexRoute
   AuthMagicLinkTokenRoute: typeof AuthMagicLinkTokenRoute
@@ -207,10 +243,6 @@ export interface RootRouteChildren {
   AuthVerifyEmailTokenRoute: typeof AuthVerifyEmailTokenRoute
   OrgsAcceptInviteTokenRoute: typeof OrgsAcceptInviteTokenRoute
   OrgsAcceptShareTokenRoute: typeof OrgsAcceptShareTokenRoute
-  OrgsSlugIndexRoute: typeof OrgsSlugIndexRoute
-  OrgsSlugProjectsProjectSlugRoute: typeof OrgsSlugProjectsProjectSlugRoute
-  OrgsSlugSettingsMembersRoute: typeof OrgsSlugSettingsMembersRoute
-  OrgsSlugProjectsIndexRoute: typeof OrgsSlugProjectsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -236,6 +268,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/orgs/$slug': {
+      id: '/orgs/$slug'
+      path: '/orgs/$slug'
+      fullPath: '/orgs/$slug'
+      preLoaderRoute: typeof OrgsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/register': {
       id: '/auth/register'
       path: '/auth/register'
@@ -252,10 +291,10 @@ declare module '@tanstack/react-router' {
     }
     '/orgs/$slug/': {
       id: '/orgs/$slug/'
-      path: '/orgs/$slug'
+      path: '/'
       fullPath: '/orgs/$slug/'
       preLoaderRoute: typeof OrgsSlugIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof OrgsSlugRoute
     }
     '/orgs/accept-share/$token': {
       id: '/orgs/accept-share/$token'
@@ -270,6 +309,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/orgs/accept-invite/$token'
       preLoaderRoute: typeof OrgsAcceptInviteTokenRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/orgs/$slug/settings': {
+      id: '/orgs/$slug/settings'
+      path: '/settings'
+      fullPath: '/orgs/$slug/settings'
+      preLoaderRoute: typeof OrgsSlugSettingsRouteImport
+      parentRoute: typeof OrgsSlugRoute
     }
     '/auth/verify-email/$token': {
       id: '/auth/verify-email/$token'
@@ -294,32 +340,71 @@ declare module '@tanstack/react-router' {
     }
     '/orgs/$slug/projects/': {
       id: '/orgs/$slug/projects/'
-      path: '/orgs/$slug/projects'
+      path: '/projects'
       fullPath: '/orgs/$slug/projects/'
       preLoaderRoute: typeof OrgsSlugProjectsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof OrgsSlugRoute
     }
     '/orgs/$slug/settings/members': {
       id: '/orgs/$slug/settings/members'
-      path: '/orgs/$slug/settings/members'
+      path: '/members'
       fullPath: '/orgs/$slug/settings/members'
       preLoaderRoute: typeof OrgsSlugSettingsMembersRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof OrgsSlugSettingsRoute
+    }
+    '/orgs/$slug/settings/branding': {
+      id: '/orgs/$slug/settings/branding'
+      path: '/branding'
+      fullPath: '/orgs/$slug/settings/branding'
+      preLoaderRoute: typeof OrgsSlugSettingsBrandingRouteImport
+      parentRoute: typeof OrgsSlugSettingsRoute
     }
     '/orgs/$slug/projects/$projectSlug': {
       id: '/orgs/$slug/projects/$projectSlug'
-      path: '/orgs/$slug/projects/$projectSlug'
+      path: '/projects/$projectSlug'
       fullPath: '/orgs/$slug/projects/$projectSlug'
       preLoaderRoute: typeof OrgsSlugProjectsProjectSlugRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof OrgsSlugRoute
     }
   }
 }
+
+interface OrgsSlugSettingsRouteChildren {
+  OrgsSlugSettingsBrandingRoute: typeof OrgsSlugSettingsBrandingRoute
+  OrgsSlugSettingsMembersRoute: typeof OrgsSlugSettingsMembersRoute
+}
+
+const OrgsSlugSettingsRouteChildren: OrgsSlugSettingsRouteChildren = {
+  OrgsSlugSettingsBrandingRoute: OrgsSlugSettingsBrandingRoute,
+  OrgsSlugSettingsMembersRoute: OrgsSlugSettingsMembersRoute,
+}
+
+const OrgsSlugSettingsRouteWithChildren =
+  OrgsSlugSettingsRoute._addFileChildren(OrgsSlugSettingsRouteChildren)
+
+interface OrgsSlugRouteChildren {
+  OrgsSlugSettingsRoute: typeof OrgsSlugSettingsRouteWithChildren
+  OrgsSlugIndexRoute: typeof OrgsSlugIndexRoute
+  OrgsSlugProjectsProjectSlugRoute: typeof OrgsSlugProjectsProjectSlugRoute
+  OrgsSlugProjectsIndexRoute: typeof OrgsSlugProjectsIndexRoute
+}
+
+const OrgsSlugRouteChildren: OrgsSlugRouteChildren = {
+  OrgsSlugSettingsRoute: OrgsSlugSettingsRouteWithChildren,
+  OrgsSlugIndexRoute: OrgsSlugIndexRoute,
+  OrgsSlugProjectsProjectSlugRoute: OrgsSlugProjectsProjectSlugRoute,
+  OrgsSlugProjectsIndexRoute: OrgsSlugProjectsIndexRoute,
+}
+
+const OrgsSlugRouteWithChildren = OrgsSlugRoute._addFileChildren(
+  OrgsSlugRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
+  OrgsSlugRoute: OrgsSlugRouteWithChildren,
   OrgsNewRoute: OrgsNewRoute,
   OrgsIndexRoute: OrgsIndexRoute,
   AuthMagicLinkTokenRoute: AuthMagicLinkTokenRoute,
@@ -327,10 +412,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthVerifyEmailTokenRoute: AuthVerifyEmailTokenRoute,
   OrgsAcceptInviteTokenRoute: OrgsAcceptInviteTokenRoute,
   OrgsAcceptShareTokenRoute: OrgsAcceptShareTokenRoute,
-  OrgsSlugIndexRoute: OrgsSlugIndexRoute,
-  OrgsSlugProjectsProjectSlugRoute: OrgsSlugProjectsProjectSlugRoute,
-  OrgsSlugSettingsMembersRoute: OrgsSlugSettingsMembersRoute,
-  OrgsSlugProjectsIndexRoute: OrgsSlugProjectsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

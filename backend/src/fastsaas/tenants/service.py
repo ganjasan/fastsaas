@@ -144,6 +144,39 @@ class OrganisationService:
             return [(org, OrganisationRole(role)) for (org, role) in rows]
 
     @staticmethod
+    async def update_theme(*, org_id: UUID, theme: dict[str, Any]) -> Organisation:
+        """Replace `organisations.theme` JSONB and emit one audit row.
+
+        Caller must already have verified `can(admin, organisation, org_id)`.
+        The before/after diff goes into the audit row so a compliance read
+        can reconstruct re-branding history. Replaces, doesn't merge — Phase 1
+        contract is "pick a whole preset", not "tweak one field".
+        """
+        async with migrator_session_scope() as db:
+            org = await db.get(Organisation, org_id)
+            if org is None or org.deleted_at is not None:
+                raise OrgNotFoundError(str(org_id))
+
+            before_theme = dict(org.theme or {})
+            org.theme = dict(theme)
+            db.add(org)
+
+            await audit.record(
+                db,
+                action="update",
+                entity_type="organisation",
+                entity_id=org.id,
+                diff={
+                    "before": {"theme": before_theme},
+                    "after": {"theme": dict(theme)},
+                },
+                organisation_id=org.id,
+            )
+            await db.flush()
+            await db.refresh(org)
+            return org
+
+    @staticmethod
     async def soft_delete(*, org_id: UUID, actor_id: UUID) -> None:
         """Soft-delete the org and revoke every bundle granted within it.
 

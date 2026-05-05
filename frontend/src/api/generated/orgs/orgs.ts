@@ -33,6 +33,7 @@ import type {
   OrgCreateRequest,
   OrgListItem,
   OrgRead,
+  OrgThemeUpdateRequest,
   RoleChangeRequest
 } from '../fastSaaS.schemas';
 
@@ -347,6 +348,70 @@ export const useDeleteOrgOrgsSlugDelete = <TError = HTTPValidationError,
       > => {
 
       const mutationOptions = getDeleteOrgOrgsSlugDeleteMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Update Org Theme
+ */
+export const updateOrgThemeOrgsSlugThemePatch = (
+    slug: string,
+    orgThemeUpdateRequest: OrgThemeUpdateRequest,
+ ) => {
+      
+      
+      return apiClient<OrgRead>(
+      {url: `/orgs/${slug}/theme`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: orgThemeUpdateRequest
+    },
+      );
+    }
+  
+
+
+export const getUpdateOrgThemeOrgsSlugThemePatchMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOrgThemeOrgsSlugThemePatch>>, TError,{slug: string;data: OrgThemeUpdateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateOrgThemeOrgsSlugThemePatch>>, TError,{slug: string;data: OrgThemeUpdateRequest}, TContext> => {
+
+const mutationKey = ['updateOrgThemeOrgsSlugThemePatch'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOrgThemeOrgsSlugThemePatch>>, {slug: string;data: OrgThemeUpdateRequest}> = (props) => {
+          const {slug,data} = props ?? {};
+
+          return  updateOrgThemeOrgsSlugThemePatch(slug,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOrgThemeOrgsSlugThemePatchMutationResult = NonNullable<Awaited<ReturnType<typeof updateOrgThemeOrgsSlugThemePatch>>>
+    export type UpdateOrgThemeOrgsSlugThemePatchMutationBody = OrgThemeUpdateRequest
+    export type UpdateOrgThemeOrgsSlugThemePatchMutationError = HTTPValidationError
+
+    /**
+ * @summary Update Org Theme
+ */
+export const useUpdateOrgThemeOrgsSlugThemePatch = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOrgThemeOrgsSlugThemePatch>>, TError,{slug: string;data: OrgThemeUpdateRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateOrgThemeOrgsSlugThemePatch>>,
+        TError,
+        {slug: string;data: OrgThemeUpdateRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateOrgThemeOrgsSlugThemePatchMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }
