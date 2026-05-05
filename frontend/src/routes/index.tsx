@@ -1,22 +1,32 @@
 /**
  * `/` — root entry point.
  *
- * Redirects based on auth state:
- * - Unauthenticated → `/auth/login`.
- * - Authenticated → `/orgs` (the org-list page handles its own pin/empty
- *   state and forwards into the active org from there).
+ * Redirect ladder:
+ * - No access token → `/auth/login`.
+ * - Has token + pinned org slug from a previous session → `/orgs/{slug}`
+ *   (lands the user in the dashboard they last used; if the slug is no
+ *   longer accessible, the org-fetch on that route will 404 and the user
+ *   can navigate to the org list manually).
+ * - Has token but no pinned slug → `/orgs` (org list / empty-state).
  *
- * The redirect runs in `beforeLoad` so the user never sees an intermediate
- * placeholder. The auth store is in-memory (per ADR-008 hybrid storage),
- * so the read here is synchronous — no flicker.
+ * The redirect runs in `beforeLoad`. The auth store is in-memory and the
+ * org store reads localStorage synchronously, so neither call blocks.
  */
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { useAuthStore } from "@/features/auth/lib/authStore";
+import { useOrgStore } from "@/features/orgs/lib/orgStore";
 
 export const Route = createFileRoute("/")({
   beforeLoad: () => {
     const token = useAuthStore.getState().accessToken;
-    throw redirect({ to: token ? "/orgs" : "/auth/login" });
+    if (token === null) {
+      throw redirect({ to: "/auth/login" });
+    }
+    const slug = useOrgStore.getState().currentOrgSlug;
+    if (slug !== null && slug.length > 0) {
+      throw redirect({ to: "/orgs/$slug", params: { slug } });
+    }
+    throw redirect({ to: "/orgs" });
   },
 });
