@@ -182,7 +182,9 @@ function SidebarBody({
 }): ReactNode {
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b p-3">{header(collapsed)}</div>
+      {/* h-14 matches the topbar height so the two headers form a single
+          visual bar across the page. */}
+      <div className="flex h-14 shrink-0 items-center border-b px-2">{header(collapsed)}</div>
       <div className="flex-1 overflow-y-auto py-3">
         {sections.map((section, idx) => (
           <SidebarSection
