@@ -1435,6 +1435,60 @@
         }
       }
     },
+    "/orgs/{slug}/audit/scrub": {
+      "post": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Scrub Audit Log",
+        "operationId": "scrub_audit_log_orgs__slug__audit_scrub_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrubResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -1853,7 +1907,8 @@
           "admin",
           "member",
           "viewer",
-          "compliance_officer"
+          "compliance_officer",
+          "dpo"
         ],
         "title": "OrganisationRole"
       },
@@ -2229,6 +2284,24 @@
           "role"
         ],
         "title": "RoleChangeRequest"
+      },
+      "ScrubResult": {
+        "properties": {
+          "rows_scrubbed": {
+            "type": "integer",
+            "title": "Rows Scrubbed"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows_scrubbed",
+          "dry_run"
+        ],
+        "title": "ScrubResult"
       },
       "TokensResponse": {
         "properties": {
