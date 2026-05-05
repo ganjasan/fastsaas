@@ -270,3 +270,132 @@ async def test_non_member_delete_org_404(
     r = await client.delete("/orgs/acme", headers={"Authorization": f"Bearer {outsider}"})
     assert r.status_code == 404
     assert r.json()["detail"]["code"] == "org.not_found_or_forbidden"
+
+
+# ─── PATCH /orgs/{slug}/theme ──────────────────────────────────────────────
+
+
+async def test_owner_patches_theme_200_and_persists(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN an owner WHEN PATCH /orgs/acme/theme with corporate preset THEN 200 and the org payload reflects the new theme."""
+    pw = "correct horse battery staple"
+    owner = await _register_and_login(client, mailhog, _email(), pw)
+    await client.post("/orgs", json={"name": "Acme", "slug": "acme"}, headers={"Authorization": f"Bearer {owner}"})
+
+    r = await client.patch(
+        "/orgs/acme/theme",
+        json={"preset": "corporate", "mode_default": "dark"},
+        headers={"Authorization": f"Bearer {owner}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["theme"] == {"preset": "corporate", "mode_default": "dark"}
+
+    # AND a fresh GET reflects the persisted state.
+    r = await client.get("/orgs/acme", headers={"Authorization": f"Bearer {owner}"})
+    assert r.status_code == 200
+    assert r.json()["theme"] == {"preset": "corporate", "mode_default": "dark"}
+
+
+async def test_patch_theme_invalid_preset_422(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN an owner WHEN PATCH /orgs/acme/theme with unknown preset THEN 422 (Pydantic enum) and theme unchanged."""
+    pw = "correct horse battery staple"
+    owner = await _register_and_login(client, mailhog, _email(), pw)
+    await client.post("/orgs", json={"name": "Acme", "slug": "acme"}, headers={"Authorization": f"Bearer {owner}"})
+
+    r = await client.patch(
+        "/orgs/acme/theme",
+        json={"preset": "neon-pink"},
+        headers={"Authorization": f"Bearer {owner}"},
+    )
+    assert r.status_code == 422, r.text
+    # Theme stays empty.
+    r = await client.get("/orgs/acme", headers={"Authorization": f"Bearer {owner}"})
+    assert r.json()["theme"] == {}
+
+
+async def test_patch_theme_unknown_field_422(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN an owner WHEN body contains an unknown key THEN 422 (extra=forbid)."""
+    pw = "correct horse battery staple"
+    owner = await _register_and_login(client, mailhog, _email(), pw)
+    await client.post("/orgs", json={"name": "Acme", "slug": "acme"}, headers={"Authorization": f"Bearer {owner}"})
+
+    r = await client.patch(
+        "/orgs/acme/theme",
+        json={"preset": "default", "primary": "#abcdef"},
+        headers={"Authorization": f"Bearer {owner}"},
+    )
+    assert r.status_code == 422, r.text
+
+
+async def test_patch_theme_non_admin_403(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN a plain member WHEN PATCH /orgs/acme/theme THEN 403 authz.forbidden and theme unchanged."""
+    pw = "correct horse battery staple"
+    owner = await _register_and_login(client, mailhog, _email(), pw)
+    r = await client.post(
+        "/orgs", json={"name": "Acme", "slug": "acme"}, headers={"Authorization": f"Bearer {owner}"}
+    )
+    assert r.status_code == 201
+
+    # Owner invites a regular member.
+    member_email = _email()
+    r = await client.post(
+        "/orgs/acme/members/invite",
+        json={"email": member_email, "role": "member"},
+        headers={"Authorization": f"Bearer {owner}"},
+    )
+    assert r.status_code == 201
+
+    msgs = (await mailhog.get("/api/v2/messages")).json()
+    invite_body = msgs["items"][0]["Content"]["Body"]
+    decoded = quopri.decodestring(invite_body).decode("utf-8", errors="replace")
+    invite_link_match = re.search(r"https?://[^\s\"<>]+", decoded)
+    assert invite_link_match is not None
+    invite_token = invite_link_match.group(0).rsplit("/", 1)[-1]
+    await mailhog.delete("/api/v1/messages")
+
+    member = await _register_and_login(client, mailhog, member_email, pw)
+    r = await client.post(
+        "/orgs/members/accept",
+        json={"token": invite_token},
+        headers={"Authorization": f"Bearer {member}"},
+    )
+    assert r.status_code == 200
+
+    # Member tries to patch theme.
+    r = await client.patch(
+        "/orgs/acme/theme",
+        json={"preset": "corporate"},
+        headers={"Authorization": f"Bearer {member}"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "authz.forbidden"
+
+    # Theme remained empty.
+    r = await client.get("/orgs/acme", headers={"Authorization": f"Bearer {member}"})
+    assert r.json()["theme"] == {}
+
+
+async def test_patch_theme_non_member_404(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN an outsider WHEN PATCH /orgs/acme/theme THEN 404 (tenant_context guards)."""
+    pw = "correct horse battery staple"
+    owner = await _register_and_login(client, mailhog, _email(), pw)
+    await client.post("/orgs", json={"name": "Acme", "slug": "acme"}, headers={"Authorization": f"Bearer {owner}"})
+
+    outsider = await _register_and_login(client, mailhog, _email(), pw)
+    r = await client.patch(
+        "/orgs/acme/theme",
+        json={"preset": "default"},
+        headers={"Authorization": f"Bearer {outsider}"},
+    )
+    assert r.status_code == 404
+

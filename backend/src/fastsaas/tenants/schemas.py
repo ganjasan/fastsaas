@@ -7,12 +7,40 @@ without altering the storage shape — same convention as identity/schemas.py.
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from fastsaas.tenants.models import OrganisationRole
+
+
+class ThemePreset(StrEnum):
+    """Phase 1 preset enum per ADR-012. Phase 2 will add a free-form theme
+    editor; until then the wire contract is one of these five values."""
+
+    DEFAULT = "default"
+    MODERN = "modern"
+    CORPORATE = "corporate"
+    DARK = "dark"
+    HIGH_CONTRAST = "high-contrast"
+
+
+class ThemeModeDefault(StrEnum):
+    LIGHT = "light"
+    DARK = "dark"
+    SYSTEM = "system"
+
+
+class OrgThemeUpdateRequest(BaseModel):
+    """Body for `PATCH /orgs/{slug}/theme`. Replaces (not merges) the
+    persisted `organisations.theme` JSONB."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preset: ThemePreset
+    mode_default: ThemeModeDefault | None = None
 
 
 class OrgCreateRequest(BaseModel):

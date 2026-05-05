@@ -746,6 +746,58 @@
         }
       }
     },
+    "/orgs/{slug}/theme": {
+      "patch": {
+        "tags": [
+          "orgs"
+        ],
+        "summary": "Update Org Theme",
+        "operationId": "update_org_theme_orgs__slug__theme_patch",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrgThemeUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/orgs/{slug}/members": {
       "get": {
         "tags": [
@@ -1900,6 +1952,30 @@
         ],
         "title": "OrgRead"
       },
+      "OrgThemeUpdateRequest": {
+        "properties": {
+          "preset": {
+            "$ref": "#/components/schemas/ThemePreset"
+          },
+          "mode_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThemeModeDefault"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "preset"
+        ],
+        "title": "OrgThemeUpdateRequest",
+        "description": "Body for `PATCH /orgs/{slug}/theme`. Replaces (not merges) the\npersisted `organisations.theme` JSONB."
+      },
       "OrganisationRole": {
         "type": "string",
         "enum": [
@@ -2302,6 +2378,27 @@
           "dry_run"
         ],
         "title": "ScrubResult"
+      },
+      "ThemeModeDefault": {
+        "type": "string",
+        "enum": [
+          "light",
+          "dark",
+          "system"
+        ],
+        "title": "ThemeModeDefault"
+      },
+      "ThemePreset": {
+        "type": "string",
+        "enum": [
+          "default",
+          "modern",
+          "corporate",
+          "dark",
+          "high-contrast"
+        ],
+        "title": "ThemePreset",
+        "description": "Phase 1 preset enum per ADR-012. Phase 2 will add a free-form theme\neditor; until then the wire contract is one of these five values."
       },
       "TokensResponse": {
         "properties": {

@@ -4,7 +4,6 @@
  */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createFileRoute, useParams } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import {
@@ -33,8 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { OrgSwitcher } from "@/features/orgs/components/OrgSwitcher";
-import { useOrgStore } from "@/features/orgs/lib/orgStore";
 import { type InviteMemberInput, inviteMemberSchema } from "@/features/orgs/lib/schemas";
 
 export const Route = createFileRoute("/orgs/$slug/settings/members")({
@@ -45,10 +42,6 @@ const ROLES = ["admin", "member", "viewer", "compliance_officer"] as const;
 
 function MembersPage() {
   const { slug } = useParams({ from: "/orgs/$slug/settings/members" });
-  const setSlug = useOrgStore((s) => s.setCurrentOrgSlug);
-  useEffect(() => {
-    setSlug(slug);
-  }, [slug, setSlug]);
 
   const { data, isLoading, refetch } = useListMembersOrgsSlugMembersGet(slug);
   const invite = useInviteMemberOrgsSlugMembersInvitePost();
@@ -89,13 +82,10 @@ function MembersPage() {
   };
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Members</h1>
-          <p className="text-sm text-muted-foreground">{slug}</p>
-        </div>
-        <OrgSwitcher />
+    <div className="space-y-6">
+      <header>
+        <h2 className="text-xl font-semibold tracking-tight">Members</h2>
+        <p className="text-sm text-muted-foreground">Invite people, change roles, remove access.</p>
       </header>
 
       <Card>
@@ -229,6 +219,6 @@ function MembersPage() {
           </CardContent>
         </Card>
       ) : null}
-    </main>
+    </div>
   );
 }

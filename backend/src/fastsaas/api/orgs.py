@@ -45,6 +45,7 @@ from fastsaas.tenants.schemas import (
     OrgCreateRequest,
     OrgListItem,
     OrgRead,
+    OrgThemeUpdateRequest,
     PendingInviteItem,
     RoleChangeRequest,
 )
@@ -148,6 +149,45 @@ async def delete_org(ctx: TenantContextDep, db: SessionDep) -> Response:
             detail={"code": "org.not_found_or_forbidden"},
         ) from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/{slug}/theme", response_model=OrgRead)
+async def update_org_theme(
+    body: OrgThemeUpdateRequest,
+    ctx: TenantContextDep,
+    db: SessionDep,
+) -> OrgRead:
+    if ctx.is_guest:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "authz.forbidden"},
+        )
+
+    ok = await can(
+        ctx.actor.actor_id,
+        Operation.ADMIN,
+        ResourceType.ORGANISATION,
+        ctx.org.id,
+        db=db,
+        cache=get_redis(),
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "authz.forbidden"},
+        )
+
+    try:
+        org = await OrganisationService.update_theme(
+            org_id=ctx.org.id,
+            theme=body.model_dump(mode="json", exclude_none=True),
+        )
+    except OrgNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "org.not_found_or_forbidden"},
+        ) from e
+    return OrgRead.model_validate(org)
 
 
 # ─── Members ────────────────────────────────────────────────────────────────

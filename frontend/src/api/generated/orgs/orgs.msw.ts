@@ -32,6 +32,8 @@ export const getCreateOrgOrgsPostResponseMock = (overrideResponse: Partial< OrgR
 
 export const getGetOrgOrgsSlugGetResponseMock = (overrideResponse: Partial< OrgRead > = {}): OrgRead => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), slug: faker.string.alpha({length: {min: 10, max: 20}}), theme: faker.helpers.arrayElement([{}, undefined]), created_at: `${faker.date.past().toISOString().split('.')[0]}Z`, ...overrideResponse})
 
+export const getUpdateOrgThemeOrgsSlugThemePatchResponseMock = (overrideResponse: Partial< OrgRead > = {}): OrgRead => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), slug: faker.string.alpha({length: {min: 10, max: 20}}), theme: faker.helpers.arrayElement([{}, undefined]), created_at: `${faker.date.past().toISOString().split('.')[0]}Z`, ...overrideResponse})
+
 export const getListMembersOrgsSlugMembersGetResponseMock = (overrideResponse: Partial< MembersListResponse > = {}): MembersListResponse => ({members: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(() => ({actor_id: faker.string.uuid(), email: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), display_name: faker.string.alpha({length: {min: 10, max: 20}}), role: faker.string.alpha({length: {min: 10, max: 20}}), created_at: `${faker.date.past().toISOString().split('.')[0]}Z`})), pending: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), email: faker.string.alpha({length: {min: 10, max: 20}}), role: faker.string.alpha({length: {min: 10, max: 20}}), invited_by: faker.string.uuid(), expires_at: `${faker.date.past().toISOString().split('.')[0]}Z`, created_at: `${faker.date.past().toISOString().split('.')[0]}Z`})), ...overrideResponse})
 
 export const getInviteMemberOrgsSlugMembersInvitePostResponseMock = (overrideResponse: Partial< InviteResponse > = {}): InviteResponse => ({id: faker.string.uuid(), email: faker.string.alpha({length: {min: 10, max: 20}}), role: faker.string.alpha({length: {min: 10, max: 20}}), expires_at: `${faker.date.past().toISOString().split('.')[0]}Z`, ...overrideResponse})
@@ -81,6 +83,18 @@ export const getDeleteOrgOrgsSlugDeleteMockHandler = (overrideResponse?: void | 
     return new HttpResponse(null,
       { status: 204,
         
+      })
+  }, options)
+}
+
+export const getUpdateOrgThemeOrgsSlugThemePatchMockHandler = (overrideResponse?: OrgRead | ((info: Parameters<Parameters<typeof http.patch>[1]>[0]) => Promise<OrgRead> | OrgRead), options?: RequestHandlerOptions) => {
+  return http.patch('*/orgs/:slug/theme', async (info) => {await delay(1000);
+  
+    return new HttpResponse(JSON.stringify(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getUpdateOrgThemeOrgsSlugThemePatchResponseMock()),
+      { status: 200,
+        headers: { 'Content-Type': 'application/json' }
       })
   }, options)
 }
@@ -145,6 +159,7 @@ export const getOrgsMock = () => [
   getCreateOrgOrgsPostMockHandler(),
   getGetOrgOrgsSlugGetMockHandler(),
   getDeleteOrgOrgsSlugDeleteMockHandler(),
+  getUpdateOrgThemeOrgsSlugThemePatchMockHandler(),
   getListMembersOrgsSlugMembersGetMockHandler(),
   getInviteMemberOrgsSlugMembersInvitePostMockHandler(),
   getAcceptInviteOrgsMembersAcceptPostMockHandler(),
