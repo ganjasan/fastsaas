@@ -38,7 +38,12 @@ export const Route = createFileRoute("/orgs/$slug/settings/members")({
   component: MembersPage,
 });
 
-const ROLES = ["admin", "member", "viewer", "compliance_officer"] as const;
+// Operational roles surfaced in the Members UI. Compliance roles
+// (`compliance_officer`, `dpo`) and `owner` are managed elsewhere; existing
+// members with those roles render read-only here so this UI can't accidentally
+// downgrade them. See issue #32.
+const ROLES = ["admin", "member", "viewer"] as const;
+const RESTRICTED_ROLES = new Set(["owner", "compliance_officer", "dpo"]);
 
 function MembersPage() {
   const { slug } = useParams({ from: "/orgs/$slug/settings/members" });
@@ -156,13 +161,15 @@ function MembersPage() {
                       <Select
                         defaultValue={m.role}
                         onValueChange={(v) => onChangeRole(m.actor_id, v as (typeof ROLES)[number])}
-                        disabled={m.role === "owner"}
+                        disabled={RESTRICTED_ROLES.has(m.role)}
                       >
                         <SelectTrigger className="w-40">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {m.role === "owner" ? <SelectItem value="owner">owner</SelectItem> : null}
+                          {RESTRICTED_ROLES.has(m.role) ? (
+                            <SelectItem value={m.role}>{m.role}</SelectItem>
+                          ) : null}
                           {ROLES.map((r) => (
                             <SelectItem key={r} value={r}>
                               {r}
@@ -176,7 +183,7 @@ function MembersPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => onRemove(m.actor_id)}
-                        disabled={m.role === "owner"}
+                        disabled={RESTRICTED_ROLES.has(m.role)}
                       >
                         Remove
                       </Button>
