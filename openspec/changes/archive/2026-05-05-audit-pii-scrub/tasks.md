@@ -55,5 +55,5 @@ Linked issue: ganjasan/fastsaas#13.
 - [x] 7.1 `openspec validate audit-pii-scrub --strict` passes.
 - [x] 7.2 `cd backend && uv run ruff check .` clean.
 - [x] 7.3 `./run_test.sh -q` green — 216 passed (190 pre-existing + 23 new bundle/scrub unit tests + 8 new scrub integration tests, minus deltas).
-- [ ] 7.4 PR opened, linked to issue #13.
-- [ ] 7.5 Archive change after merge; sync delta specs to `openspec/specs/audit/`.
+- [x] 7.4 PR opened, linked to issue #13 — https://github.com/ganjasan/fastsaas/pull/16 (merged via squash commit 6f189e0).
+- [x] 7.5 Archive change after merge; sync delta specs to `openspec/specs/audit/`.
