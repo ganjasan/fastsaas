@@ -20,6 +20,15 @@ from fastsaas.audit.middleware import AuditContextMiddleware
 from fastsaas.audit.mixin import AuditedModel
 from fastsaas.audit.models import AuditLog
 from fastsaas.audit.redact import GLOBAL_REDACT, REDACTED_LITERAL, redact
+from fastsaas.audit.scrub import (
+    SCRUBBED_FIELDS,
+    SCRUBBED_GDPR_LITERAL,
+    AuditScrubService,
+    ScrubFilter,
+    ScrubFilterError,
+    ScrubRequest,
+    ScrubResult,
+)
 from fastsaas.audit.service import (
     AuditAction,
     MissingActorError,
@@ -30,13 +39,20 @@ from fastsaas.audit.service import (
 __all__ = [
     "GLOBAL_REDACT",
     "REDACTED_LITERAL",
+    "SCRUBBED_FIELDS",
+    "SCRUBBED_GDPR_LITERAL",
     "AuditAction",
     "AuditContextMiddleware",
     "AuditLog",
+    "AuditScrubService",
     "AuditedModel",
     "IntentContext",
     "MissingActorError",
     "MissingIntentError",
+    "ScrubFilter",
+    "ScrubFilterError",
+    "ScrubRequest",
+    "ScrubResult",
     "context_present",
     "record",
     "redact",

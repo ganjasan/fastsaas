@@ -25,6 +25,7 @@ class OrganisationRole(StrEnum):
     MEMBER = "member"
     VIEWER = "viewer"
     COMPLIANCE_OFFICER = "compliance_officer"
+    DPO = "dpo"
 
 
 class Organisation(SQLModel, table=True):

@@ -25,6 +25,7 @@ class Operation(StrEnum):
     ADMIN = "admin"
     SHARE = "share"
     GRANT = "grant"
+    SCRUB = "scrub"
 
 
 class ResourceType(StrEnum):
@@ -104,6 +105,14 @@ BUNDLES: dict[str, list[CapabilityTemplate]] = {
     "role:compliance_officer": [
         Cap("read", "audit_log", scope="self"),
     ],
+    "role:dpo": [
+        # Data Protection Officer — handles GDPR Art.17 erasure requests.
+        # `read` so the DPO can locate rows; `scrub` so they can erase PII.
+        # Compliance officer keeps `read` only — read and erase are
+        # different responsibilities under GDPR.
+        Cap("read",  "audit_log", scope="self"),
+        Cap("scrub", "audit_log", scope="self"),
+    ],
 }
 
 
@@ -116,5 +125,6 @@ PRIMARY_BUNDLES: frozenset[str] = frozenset(
         "role:member",
         "role:viewer",
         "role:compliance_officer",
+        "role:dpo",
     }
 )

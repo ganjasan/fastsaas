@@ -21,7 +21,7 @@ from fastsaas.audit.models import AuditLog
 from fastsaas.audit.redact import redact
 from fastsaas.identity.schemas import CurrentActor
 
-AuditAction = Literal["create", "update", "delete", "restore"]
+AuditAction = Literal["create", "update", "delete", "restore", "scrub"]
 
 
 class MissingActorError(RuntimeError):

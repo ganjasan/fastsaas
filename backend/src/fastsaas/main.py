@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from fastsaas import __version__
+from fastsaas.api.audit import router as audit_router
 from fastsaas.api.auth import router as auth_router
 from fastsaas.api.orgs import router as orgs_router
 from fastsaas.api.projects import (
@@ -48,6 +49,7 @@ app.include_router(auth_router)
 app.include_router(orgs_router)
 app.include_router(projects_router)
 app.include_router(projects_accept_share_router)
+app.include_router(audit_router)
 
 
 @app.get("/health")

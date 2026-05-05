@@ -36,6 +36,13 @@ _HASH_LEN = 16  # hex chars
 # dependent; this is the in-app backstop that survives deployment drift.
 _MAX_FIELD_LEN = 4096
 
+# Canonical list of `intent_metadata` keys that carry client-observable PII
+# / fingerprintable data and are therefore subject to GDPR Art.17 erasure.
+# `audit/scrub.py::SCRUBBED_FIELDS` MUST match this tuple — a module-level
+# assert there fails loud if the two ever drift. New keys added here that
+# DON'T need scrubbing must be excluded with a written reason in ADR-010.
+PII_INTENT_KEYS: tuple[str, ...] = ("ip", "user_agent", "original_prompt", "path")
+
 
 def _short(payload: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:_HASH_LEN]

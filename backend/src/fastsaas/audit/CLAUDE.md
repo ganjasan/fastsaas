@@ -218,15 +218,96 @@ is verbatim — assume malicious payloads.
   and `original_prompt`. Disk is cheap; provenance is not.
 - **Do NOT mutate `audit_log` rows after the fact.** The table is
   immortal per ADR-006; RLS has no UPDATE/DELETE policies for the app
-  role. If GDPR scrubbing is needed, use the dedicated PII-redaction
-  endpoint (backlog) — it preserves the structural trail and only
-  zeroes fields inside `intent_metadata`.
+  role. The ONE sanctioned mutation path is the GDPR scrub endpoint —
+  see §"Scrubbing PII for GDPR" below. It runs in the migrator session,
+  touches only four `intent_metadata` keys, and writes a meta-audit row
+  for the scrub itself.
 - **Do NOT add a custom `entity_type` like `widget_v2` for migrations.**
   Schema versions belong in `intent_metadata.schema_version` if at all.
 - **Do NOT silently skip audit on operations that "feel internal".**
   Background jobs, scheduled cleanups, and re-orgs all touch domain
   rows the compliance officer is auditing. Set `actor_var` from the
   worker harness and call `record(...)` like any other code path.
+
+## Scrubbing PII for GDPR
+
+The audit log is immortal but the four client-controlled keys inside
+`intent_metadata` carry PII subject to GDPR Art.17 right-to-erasure:
+`ip`, `user_agent`, `original_prompt`, `path`. The canonical list lives
+in `audit/intent.py::PII_INTENT_KEYS`; if you add a new key to
+`intent_metadata` and it's client-observable, extend that tuple AND
+`audit/scrub.py::SCRUBBED_FIELDS` (a module-level assert in `scrub.py`
+fails loud if the two drift).
+
+The endpoint is `POST /api/orgs/{slug}/audit/scrub`. Capability gate:
+`Operation.SCRUB` on `ResourceType.AUDIT_LOG`. The `role:dpo` bundle
+carries `read + scrub`; `role:compliance_officer` keeps `read` only.
+Read and erase are intentionally separate responsibilities — a
+compliance officer who could erase is no longer a credible auditor.
+
+### Recipe — wet scrub from the DPO's terminal
+
+```bash
+curl -X POST https://api.example.com/orgs/acme/audit/scrub \
+  -H "Authorization: Bearer $DPO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"filter": {"actor_id": "<uuid-of-erased-subject>"}, "dry_run": false}'
+# → {"rows_scrubbed": 47, "dry_run": false}
+```
+
+What happens server-side:
+
+1. `TenantContext` resolves `acme` → pins `app.current_org`, confirms
+   the DPO is a member.
+2. `can(actor, SCRUB, AUDIT_LOG, org.id)` — 403 if the bundle isn't
+   `role:dpo`.
+3. `AuditScrubService.scrub(...)` opens `migrator_session_scope`
+   (BYPASSRLS is required — RLS forbids UPDATE on `audit_log` for
+   `app_user` regardless of capability).
+4. `UPDATE audit_log SET intent_metadata = jsonb_set(...)` runs over
+   `organisation_id = acme.id AND actor_id = <subject> AND
+   <not-already-scrubbed>`. Each of the four PII keys is set to the
+   literal `"<scrubbed:gdpr>"`; absent keys stay absent
+   (`create_missing => false`).
+5. One `audit_scrub` meta row appends in the same transaction:
+   `entity_type = "audit_scrub"`, `action = "scrub"`,
+   `diff = {"filter": {...}, "rows_scrubbed": 47}`. If the UPDATE
+   fails, the meta row rolls back too.
+
+### What the scrub never touches
+
+`actor_id`, `actor_type`, `parent_actor_id`, `entity_type`, `entity_id`,
+`action`, `organisation_id`, `timestamp`, `intent_hash`, `diff`. The
+structural trail is preserved; the row continues to satisfy
+"who did what, when" reads. A subject who asks for `actor_id` removal
+is told no — the structural trail is the legitimate-interest
+carve-out under Art.17(3).
+
+### Filter rules
+
+- At least one of `actor_id`, `ip`, `since`, `until` MUST be set.
+  Empty filter → 400 `audit.scrub.empty_filter`.
+- Unknown keys reject → 400 `audit.scrub.unknown_filter_key`.
+- Filters AND-combine. A DPO needing OR composes two calls.
+- Dry-run is a body flag: `{"dry_run": true}`. Returns the count,
+  performs no UPDATE, writes no meta row.
+- Org-scoped: cross-org filters silently constrained to the URL-resolved
+  org id. A DPO of `acme` cannot scrub `globex` rows.
+
+### Idempotency
+
+Re-running the same filter is a no-op for data — the `WHERE` clause
+excludes rows whose four PII keys already equal the sentinel. The
+meta-audit row still writes (the DPO's repeat intent is itself logged).
+
+### Sentinel discriminator
+
+`<scrubbed:gdpr>` is distinct from `<redacted>`. `<redacted>` means
+"this column was sensitive at write time and never persisted to the
+diff" (per `audit/redact.py`). `<scrubbed:gdpr>` means "this row's
+PII was erased post-hoc on a subject's request". The `:gdpr` tag
+leaves room for a future `<scrubbed:retention>` sentinel when the
+retention-driven scrub epic lands.
 
 ## Failure mode — silent coverage gap
 

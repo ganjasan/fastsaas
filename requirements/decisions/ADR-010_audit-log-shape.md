@@ -2,7 +2,7 @@
 tags: [decision, status/accepted, category/data-model, priority/high]
 created: 2026-05-01
 decided: 2026-05-01
-amended: 2026-05-04
+amended: 2026-05-05
 supersedes: []
 traces_to:
   related:
@@ -12,8 +12,10 @@ traces_to:
     - "[[ADR-013_authorization-capabilities-role-bundles]]"
   stakeholders:
     - "[[../formal/stakeholders/SH-compliance-officer]]"
+    - "[[../formal/stakeholders/SH-data-protection-officer]]"
   changes:
-    - openspec/changes/audit-trail-middleware
+    - openspec/changes/archive/2026-05-05-audit-trail-middleware
+    - openspec/changes/audit-pii-scrub
   spike: platform-saas-core-architecture-spike
   epic: the SaaS-core epic
 ---
@@ -189,6 +191,61 @@ If a downstream developer ships a new SQLModel `table=True` class without inheri
 
 This amendment supersedes the original "Field-redaction list — write down in bootstrap" open question; the answer is the global denylist in code plus `__audit_redact__` extension. The CI-lint open question stays open per the failure mode above.
 
+### 2026-05-05 — PII scrub contract for GDPR Art.17 right-to-erasure
+
+The previous amendment listed "GDPR erasure endpoint + UX" as an open question. This amendment closes the open question for the backend portion. Implementation lives in `openspec/changes/audit-pii-scrub` (issue ganjasan/fastsaas#13). The stakeholder profile is [[../formal/stakeholders/SH-data-protection-officer]] — distinct from the compliance officer who continues to read but does not erase.
+
+#### Sentinel string and scope
+
+The scrub replaces values inside `intent_metadata` only, never structural columns. Four keys are subject to erasure:
+
+```python
+PII_INTENT_KEYS = ("ip", "user_agent", "original_prompt", "path")
+```
+
+Replacement value is the literal string `"<scrubbed:gdpr>"` — distinct from `<redacted>` (at-write-time mask for sensitive columns) so reports can tell apart "this field was always redacted" from "this field was scrubbed post-hoc due to a subject request". The `:gdpr` discriminator leaves room for a future `<scrubbed:retention>` sentinel.
+
+`audit/scrub.py::SCRUBBED_FIELDS` MUST equal `audit/intent.py::PII_INTENT_KEYS` — a module-level assert in `scrub.py` fails loud if the two drift. New client-controlled keys added to `intent_metadata` either join this set or are deliberately excluded with a written reason in this section.
+
+#### What the scrub never touches
+
+`actor_id`, `actor_type`, `parent_actor_id`, `entity_type`, `entity_id`, `action`, `organisation_id`, `timestamp`, `intent_hash`, `diff`. The structural trail is preserved; the row continues to satisfy "who did what, when" reads.
+
+`actor_id` is an explicit non-scrubbable: a subject could in principle argue it links them to their actions, but removing it destroys the audit purpose (the join key for the structural trail). This is a bounded exception — documented and accepted under GDPR's "balance of interests" carve-out.
+
+#### Capability and bundle
+
+A new `Operation.SCRUB` capability gates the path; a new `role:dpo` bundle (Data Protection Officer) carries `read + scrub` on `audit_log`. `role:compliance_officer` continues to carry `read` only. Read and erase are intentionally separate responsibilities — this is the standard GDPR control split.
+
+#### Endpoint and execution
+
+`POST /api/orgs/{slug}/audit/scrub` (org-scoped — each org is its own GDPR controller). Body schema:
+
+```json
+{
+  "filter": {"actor_id": "...", "ip": "...", "since": "...", "until": "..."},
+  "dry_run": false
+}
+```
+
+Filter validation:
+
+- At least one of `actor_id`, `ip`, `since`, `until` MUST be set; empty filter rejects with 400 `audit.scrub.empty_filter`.
+- Unknown keys reject with 400 `audit.scrub.unknown_filter_key`.
+- Filters AND-combine — narrow scope wins on a destructive endpoint.
+
+Wet-path (default) opens a `migrator_session_scope` (BYPASSRLS — RLS has no UPDATE policy on `audit_log` for `app_user`), runs `UPDATE audit_log SET intent_metadata = jsonb_set(...)` over rows matching `organisation_id = <slug-resolved> AND <filter> AND <not-already-scrubbed>`, and writes one meta-audit row (`entity_type="audit_scrub"`, `action="scrub"`, `diff={"filter": {...}, "rows_scrubbed": N}`) in the same transaction. If the UPDATE fails, the meta row rolls back too.
+
+Dry-run path (`dry_run: true`) only counts; no UPDATE, no meta row.
+
+#### Idempotency
+
+Re-running the same filter is a no-op for data — the unscrubbed-condition excludes rows where all four PII keys already equal the sentinel. The meta-audit row still writes (the DPO's repeat intent is itself logged).
+
+#### Meta-audit row carries the DPO's own metadata
+
+The `audit_scrub` row's `intent_metadata` carries the DPO's request IP, user_agent, path — NOT scrubbed. The DPO acts in their professional capacity (legitimate-interest basis under GDPR), not as a data subject.
+
 ## References
 
 - [[../../openspec/changes/platform-saas-core-architecture-spike/design.md|Spike design.md — Decision #7]]
@@ -197,4 +254,5 @@ This amendment supersedes the original "Field-redaction list — write down in b
 - [[ADR-009_actor-model-cti]]
 - [[ADR-013_authorization-capabilities-role-bundles]] — `role:compliance_officer` is the primary read consumer
 - [[../formal/stakeholders/SH-compliance-officer]] — stakeholder profile served by this contract
+- [[../formal/stakeholders/SH-data-protection-officer]] — stakeholder profile for the PII scrub path
 - `openspec/changes/audit-trail-middleware/` — implementation of the extension contract

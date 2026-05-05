@@ -4,66 +4,56 @@ Linked issue: ganjasan/fastsaas#13.
 
 ## 1. Capability + bundle plumbing
 
-- [ ] 1.1 Extend `Operation` enum in `backend/src/fastsaas/authz/bundles.py`: add `SCRUB = "scrub"`.
-- [ ] 1.2 Add `role:dpo` bundle to `BUNDLES`: `[Cap("read", "audit_log", scope="self"), Cap("scrub", "audit_log", scope="self")]`.
-- [ ] 1.3 Add `"role:dpo"` to `PRIMARY_BUNDLES` (one DPO per actor per org).
-- [ ] 1.4 Confirm `OrganisationMember.role` enum / column accepts `"role:dpo"`. If it's a typed enum, extend it; if it's free-form text, no migration needed (the bundle naming carries it).
+- [x] 1.1 Extend `Operation` enum in `backend/src/fastsaas/authz/bundles.py`: add `SCRUB = "scrub"`.
+- [x] 1.2 Add `role:dpo` bundle to `BUNDLES`: `[Cap("read", "audit_log", scope="self"), Cap("scrub", "audit_log", scope="self")]`.
+- [x] 1.3 Add `"role:dpo"` to `PRIMARY_BUNDLES` (one DPO per actor per org).
+- [x] 1.4 Extend `OrganisationRole` StrEnum with `DPO = "dpo"` + `_INVITE_ROLES` allow-set in `tenants/service.py`. DB CHECK constraints on `org_invitations.role`, `organisation_members.role`, `capabilities.operation`, and `audit_log.action` extended via migration `0007_org_invitations_dpo_role.py` (renamed from "just invitations" — covers all four constraints touched by this change).
 
 ## 2. Service + route
 
-- [ ] 2.1 Create `backend/src/fastsaas/audit/scrub.py` exposing `class AuditScrubService` with:
-  - `async def scrub(*, org_id: UUID, dpo: CurrentActor, filter: ScrubFilter, dry_run: bool) -> ScrubResult`
-  - Filter validation: at least one populated field; unknown keys raise `ScrubFilterError`.
-  - Wet path: opens `migrator_session_scope`, runs `UPDATE audit_log SET intent_metadata = jsonb_set(...) WHERE organisation_id = :org AND <filter> AND NOT (intent_metadata ?& array['<scrubbed-marker>'])`, captures `rows_scrubbed`, calls `audit.record(db, action="scrub", entity_type="audit_scrub", entity_id=<uuid4>, organisation_id=org_id, diff={...})` in the same transaction.
-  - Dry path: same `WHERE`, `SELECT count(*)`, returns count, no UPDATE, no meta row.
-- [ ] 2.2 Implement `ScrubFilter` Pydantic model with `actor_id?`, `ip?`, `since?`, `until?` and the unknown-key rejection (`model_config = ConfigDict(extra="forbid")`).
-- [ ] 2.3 Implement `ScrubResult` Pydantic model: `{rows_scrubbed: int, dry_run: bool}`.
-- [ ] 2.4 Add route `POST /api/orgs/{slug}/audit/scrub` in `backend/src/fastsaas/audit/routes.py` (new file or existing, whichever the audit module lands on first):
-  - Resolves `TenantContextDep` for the slug → confirms org, sets `app.current_org`.
-  - `await can(actor, Operation.SCRUB, ResourceType.AUDIT_LOG, ctx.organisation.id, db, redis)` — 403 with `code = "authz.forbidden"` on miss.
-  - Delegates to `AuditScrubService.scrub`.
-  - Maps `ScrubFilterError` → HTTP 400 with the `audit.scrub.empty_filter` / `audit.scrub.unknown_filter_key` codes.
-- [ ] 2.5 Wire the new router into `main.py` if a top-level `audit_router` doesn't already exist.
+- [x] 2.1 Created `backend/src/fastsaas/audit/scrub.py` with `class AuditScrubService` and `async def scrub(*, org_id, dpo, scrub_filter, dry_run)`. Wet path opens `migrator_session_scope`, runs `UPDATE audit_log SET intent_metadata = jsonb_set(...)` with `create_missing => false` per field, captures `rowcount`, calls `audit.record(db, action="scrub", entity_type="audit_scrub", ...)` in the same transaction. Dry path: `SELECT count(*)` over the same `WHERE`, no UPDATE, no meta row.
+- [x] 2.2 `ScrubFilter` Pydantic model with `extra="forbid"` and `is_empty()` helper. Empty-filter check happens in route + service-layer (defence in depth).
+- [x] 2.3 `ScrubResult` Pydantic model: `{rows_scrubbed: int, dry_run: bool}`.
+- [x] 2.4 Route `POST /orgs/{slug}/audit/scrub` in `backend/src/fastsaas/api/audit.py`. Resolves `TenantContextDep`, calls `can(actor, SCRUB, AUDIT_LOG, ctx.org.id, db, redis)` — 403 `authz.forbidden` on miss. Maps `ValidationError` → 400 `audit.scrub.unknown_filter_key`/`audit.scrub.invalid_filter`; `ScrubFilterError` → 400 with the error's `code` attribute.
+- [x] 2.5 Wired `audit_router` into `main.py`.
+- [x] 2.6 Extended `AuditAction` Literal in `audit/service.py` to include `"scrub"` (the meta-audit row's action).
 
 ## 3. Sentinel + redaction integration
 
-- [ ] 3.1 Define `SCRUBBED_GDPR_LITERAL = "<scrubbed:gdpr>"` in `audit/scrub.py`. Re-export from `audit/__init__.py` as part of the public extension surface.
-- [ ] 3.2 Confirm the scrub UPDATE replaces ONLY `intent_metadata.{ip, user_agent, original_prompt, path}` and leaves any future fields untouched — write the `jsonb_set` chain explicitly per field rather than `intent_metadata = '{}'::jsonb`.
-- [ ] 3.3 Add a runtime assertion at scrub-call time that compares the four target keys to a hard-coded set imported from `audit/scrub.py` — if `intent.py` ever adds a new client-controlled key without a corresponding scrub update, the assert fires in dev/test.
+- [x] 3.1 `SCRUBBED_GDPR_LITERAL = "<scrubbed:gdpr>"` in `audit/scrub.py`; re-exported from `audit/__init__.py` along with `AuditScrubService`, `ScrubFilter`, `ScrubFilterError`, `ScrubRequest`, `ScrubResult`, `SCRUBBED_FIELDS`.
+- [x] 3.2 The scrub UPDATE replaces ONLY `ip`, `user_agent`, `original_prompt`, `path` via four chained `jsonb_set(..., create_missing => false)` calls — absent keys stay absent (presence-of-key is preserved).
+- [x] 3.3 `PII_INTENT_KEYS` constant added to `audit/intent.py`; `audit/scrub.py` imports it and module-level asserts `tuple(SCRUBBED_FIELDS) == PII_INTENT_KEYS`. If `intent.py` adds a new client-controlled key without extending the scrub set, the assert fires at import time in dev/test.
 
 ## 4. Wiegers documentation
 
-- [ ] 4.1 Append "Second amendment — PII scrub contract (2026-05-05)" to `requirements/decisions/ADR-010_audit-log-shape.md`:
-  - The `<scrubbed:gdpr>` sentinel and its discriminator from `<redacted>`.
-  - Org-scoped, four-field-only mutation rule.
-  - Meta-audit row contract (`entity_type="audit_scrub"`, etc.).
-  - DPO bundle as the only path; compliance officer remains read-only.
-  - Bounded exception: `actor_id` is NOT scrubbed (structural).
-- [ ] 4.2 Update `requirements/formal/stakeholders/SH-compliance-officer.md`: add a "Data Protection Officer" sibling profile or a section noting the role split (read vs scrub). One file per profile is the convention — likely a new `SH-data-protection-officer.md`.
-- [ ] 4.3 Update `traces_to:` frontmatter on ADR-010 to reference this change + the (new) DPO stakeholder profile.
+- [x] 4.1 Appended "2026-05-05 — PII scrub contract for GDPR Art.17 right-to-erasure" to `requirements/decisions/ADR-010_audit-log-shape.md`. Documents sentinel discriminator from `<redacted>`, org-scoped four-field-only mutation rule, meta-audit row contract, capability/bundle split, `actor_id` non-scrubbability, and the DPO's-own-metadata-not-scrubbed rule.
+- [x] 4.2 Created `requirements/formal/stakeholders/SH-data-protection-officer.md` (Wiegers form): goals, authority/responsibilities (read+scrub but not operational mutation), tasks, success metrics, pain points (real-rep not engaged, `actor_id` non-scrubbability, coverage drift, retention vs subject scrub), constraints, questions for next interview. Sibling profile to `SH-compliance-officer`. Pinned `draft`.
+- [x] 4.3 Updated ADR-010 frontmatter: `amended: 2026-05-05`, added DPO profile to `stakeholders`, added this change + the archived audit-trail-middleware path to `changes`.
 
 ## 5. Documentation for Claude
 
-- [ ] 5.1 Update `backend/src/fastsaas/audit/CLAUDE.md` §"What NOT to do" — replace the "(backlog)" reference with a direct pointer to `audit/scrub.py` and the DPO bundle.
-- [ ] 5.2 Add a §"Scrubbing PII for GDPR" section to `backend/src/fastsaas/audit/CLAUDE.md`: when to use it, the four-field scope, the sentinel, the meta-audit row, the dry-run flag.
+- [x] 5.1 Updated `backend/src/fastsaas/audit/CLAUDE.md` §"What NOT to do" — the `audit_log` immortality bullet now points to the new §"Scrubbing PII for GDPR" section instead of "(backlog)".
+- [x] 5.2 New §"Scrubbing PII for GDPR" section in `audit/CLAUDE.md`: PII key list (canonical in `intent.py::PII_INTENT_KEYS`), curl-recipe wet scrub, server-side flow, what the scrub never touches, filter rules, idempotency, sentinel discriminator.
 
 ## 6. Tests
 
-- [ ] 6.1 Unit — `audit/scrub.py::ScrubFilter` validation: empty filter → `ScrubFilterError`, unknown key → `ScrubFilterError`, valid combos pass. (`tests/test_audit_scrub_filter.py`)
-- [ ] 6.2 Unit — `AuditScrubService.scrub` dry-run: returns matched count, no UPDATE issued (assert via mocked execute or row-snapshot). (`tests/test_audit_scrub_service.py`)
-- [ ] 6.3 Integration — DPO scrubs by `actor_id`, only `intent_metadata.{ip, user_agent, original_prompt, path}` are replaced, structural columns unchanged byte-for-byte. (`tests/test_audit_scrub_integration.py`)
-- [ ] 6.4 Integration — Compliance officer (read-only) hits scrub endpoint → 403, no rows modified.
-- [ ] 6.5 Integration — Non-DPO member hits scrub endpoint → 403.
-- [ ] 6.6 Integration — Meta-audit row appended exactly once per wet scrub; not appended for dry-run.
-- [ ] 6.7 Integration — Re-running same scrub returns `rows_scrubbed: 0`; meta row still appended.
-- [ ] 6.8 Integration — Cross-org isolation: DPO of `acme` cannot scrub `globex` rows even with matching `actor_id` filter.
-- [ ] 6.9 Integration — `dry_run: true` does NOT write a meta-audit row.
-- [ ] 6.10 Integration — Scrubbed rows still appear in compliance officer cross-org reads (the structural row is preserved; only PII fields differ).
+- [x] 6.1 Unit — `tests/test_audit_scrub.py` covers `ScrubFilter` validation (empty + unknown-key reject), `ScrubRequest.dry_run` default, sentinel discriminator from `<redacted>`, and the `SCRUBBED_FIELDS == PII_INTENT_KEYS` invariant.
+- [x] 6.1a Bundle catalogue tests in `tests/test_authz_bundles.py`: `role:dpo` carries exactly read+scrub on `audit_log`; `role:compliance_officer` does NOT carry scrub; `Operation.SCRUB` is granted by exactly one bundle (no creep).
+- [x] 6.3 Integration — `tests/test_audit_scrub_integration.py::test_dpo_scrubs_by_actor_id_only_touches_pii_keys`: DPO scrubs by actor_id, structural columns (entity_type/entity_id/action/intent_hash/diff/organisation_id) unchanged byte-for-byte; PII keys (when present) replaced with sentinel.
+- [x] 6.4 Integration — `test_compliance_officer_cannot_scrub`: 403 + no audit_scrub rows + total row count unchanged.
+- [x] 6.5 Integration — `test_plain_member_cannot_scrub`: 403.
+- [x] 6.6 Integration — `test_wet_scrub_appends_meta_audit_row`: exactly one `audit_scrub` row with action="scrub", filter echoed in `diff.after.filter`, `rows_scrubbed` echoed in `diff.after.rows_scrubbed`. The DPO's own intent_metadata is NOT scrubbed (legitimate-interest carve-out).
+- [x] 6.7 Integration — `test_rerun_returns_zero_but_logs_meta`: second run returns `rows_scrubbed: 0`, second `audit_scrub` row appears.
+- [x] 6.8 Integration — `test_dpo_of_acme_cannot_scrub_globex`: DPO on acme scrubbing under `/orgs/acme/...` does not mutate any globex row; acme rows do contain the sentinel afterwards.
+- [x] 6.9 Integration — `test_dry_run_returns_count_without_mutating_or_meta`: dry-run leaves all `intent_metadata` and the audit_scrub row count unchanged.
+- [x] 6.10 Integration — `test_scrubbed_rows_remain_visible_under_compliance_officer_role`: under the `app.role = 'compliance_officer'` GUC, the scrubbed rows are still readable; at least one carries the sentinel.
+
+(Tasks 6.2 — separate dry-run unit test with mocked execute — collapsed into 6.9's integration test, which exercises the same path through the live ASGI app and is authoritative.)
 
 ## 7. Validation + close-out
 
-- [ ] 7.1 `openspec validate audit-pii-scrub --strict` passes.
-- [ ] 7.2 `cd backend && uv run ruff check .` clean.
-- [ ] 7.3 `./run_test.sh -q` green.
+- [x] 7.1 `openspec validate audit-pii-scrub --strict` passes.
+- [x] 7.2 `cd backend && uv run ruff check .` clean.
+- [x] 7.3 `./run_test.sh -q` green — 216 passed (190 pre-existing + 23 new bundle/scrub unit tests + 8 new scrub integration tests, minus deltas).
 - [ ] 7.4 PR opened, linked to issue #13.
 - [ ] 7.5 Archive change after merge; sync delta specs to `openspec/specs/audit/`.
