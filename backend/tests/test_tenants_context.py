@@ -17,7 +17,6 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -49,29 +48,18 @@ async def _reset_migrator_engine(monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
 
 
 @pytest.fixture
-async def setup_session() -> AsyncIterator[AsyncSession]:
-    """A BYPASSRLS session that wipes tenant + identity rows on entry AND exit.
+async def setup_session(wipe_state: None) -> AsyncIterator[AsyncSession]:
+    """A BYPASSRLS session for tests that need to insert fixture rows directly.
 
-    Wipes in dependency order so the next test starts from a clean slate
-    even if a previous run left rows behind.
+    Reuses the shared `wipe_state` fixture for cleanup so the dependency
+    order lives in one place (`tests/conftest.py::_WIPE_ORDER`).
     """
     settings = get_settings()
     eng = create_async_engine(settings.database_url_migrator, future=True)
     factory = async_sessionmaker(bind=eng, expire_on_commit=False, class_=AsyncSession)
-
-    async def wipe() -> None:
-        async with factory() as s, s.begin():
-            await s.execute(text("DELETE FROM capabilities"))
-            await s.execute(text("DELETE FROM projects"))
-            await s.execute(text("DELETE FROM organisation_members"))
-            await s.execute(text("DELETE FROM organisations"))
-            await s.execute(text("DELETE FROM actors"))
-
     try:
-        await wipe()
         async with factory() as s:
             yield s
-        await wipe()
     finally:
         await eng.dispose()
 

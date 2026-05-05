@@ -22,6 +22,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from fastsaas.audit.context import actor_var
 from fastsaas.db import session_scope
 from fastsaas.identity.auth import jwt as jwt_module
 from fastsaas.identity.models import Actor, ActorType, User
@@ -66,13 +67,19 @@ async def current_actor(request: Request, session: SessionDep) -> CurrentActor:
     if user is None:
         _raise("auth.account_disabled", status.HTTP_401_UNAUTHORIZED, "user row missing")
 
-    return CurrentActor(
+    resolved = CurrentActor(
         actor_id=actor.id,
         actor_type=actor.actor_type,
         parent_actor_id=actor.parent_actor_id,
         email=user.email,
         email_verified=user.email_verified,
     )
+    # Pin into the request-scoped audit contextvar so service-layer
+    # `audit.record(...)` calls inherit the actor without re-resolving
+    # the token. The contextvar dies with the per-request asyncio task,
+    # so no leak across requests.
+    actor_var.set(resolved)
+    return resolved
 
 
 CurrentActorDep = Annotated[CurrentActor, Depends(current_actor)]

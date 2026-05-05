@@ -2,14 +2,20 @@
 tags: [decision, status/accepted, category/data-model, priority/high]
 created: 2026-05-01
 decided: 2026-05-01
+amended: 2026-05-04
 supersedes: []
 traces_to:
- related:
- - "[[ADR-006_primary-keys-and-cascade]]"
- - "[[ADR-007_multi-tenant-isolation]]"
- - "[[ADR-009_actor-model-cti]]"
- spike: platform-saas-core-architecture-spike
- epic: the SaaS-core epic
+  related:
+    - "[[ADR-006_primary-keys-and-cascade]]"
+    - "[[ADR-007_multi-tenant-isolation]]"
+    - "[[ADR-009_actor-model-cti]]"
+    - "[[ADR-013_authorization-capabilities-role-bundles]]"
+  stakeholders:
+    - "[[../formal/stakeholders/SH-compliance-officer]]"
+  changes:
+    - openspec/changes/audit-trail-middleware
+  spike: platform-saas-core-architecture-spike
+  epic: the SaaS-core epic
 ---
 
 # ADR-010: Audit log shape — table with JSONB diff
@@ -130,9 +136,65 @@ Per ADR-006. GDPR right-to-erasure handled by a future endpoint that anonymises 
 - Partitioning trigger threshold + ops runbook — when row count nears 10 M.
 - GDPR erasure endpoint + UX — own backlog item.
 
+## Amendments
+
+### 2026-05-04 — Extension contract for downstream products
+
+FastSaaS is a starter kit for downstream SaaS products (FASTSAAS-app, Apilize-style modeling tools, …). Each downstream owns its own domain tables (`scenarios`, `analyses`, `properties`, …) and must inherit audit *by convention*, never by patching core. This amendment formalises the contract every downstream relies on. Implementation lives in `openspec/changes/audit-trail-middleware`. The primary stakeholder served by this contract is [[../formal/stakeholders/SH-compliance-officer]].
+
+#### `entity_type` is open vocabulary
+
+`audit_log.entity_type` is `TEXT` with no DB-level CHECK constraint. Downstream picks domain names (`scenario`, `analysis`, `property`, `model_run`) without a core migration. Convention enforced by code review and `backend/src/fastsaas/audit/CLAUDE.md`:
+
+- **lowercase, singular, noun**.
+- Reserved core values: `organisation`, `project`, `member`, `share`, `org_invitation`, `capability`, `user`, `actor`. Downstream MUST NOT shadow them.
+
+Filter queries are uniform across core and downstream — `WHERE entity_type IN ('project', 'scenario')` returns rows from both without per-domain joins.
+
+#### Two write paths, both first-class API
+
+The audit core ships two writers sharing the same redaction, contextvar, and transaction semantics:
+
+1. **Explicit `await audit.record(db, *, action, entity_type, entity_id, diff, ...)`** — for non-CRUD operations (mass-revoke, capability fan-out, soft-delete-with-cascade, hand-rolled actions). Maximum control over `diff` and `intent_metadata`. Required path for any mutation that doesn't reduce to a single ORM insert/update/delete.
+
+2. **`AuditedModel` mixin** — for typical CRUD entities. Inheritance flips on SQLAlchemy mapper-event listeners (`after_insert / after_update / after_delete`) that compute `diff` from `inspect(target).attrs.<col>.history`, apply redaction, and write the audit row in the caller's transaction. Soft-delete-flip on a `deleted_at` column is detected and reported as `action="delete"`, not `action="update"`.
+
+The two are **complementary**, not redundant. The mixin can't see "I just revoked 47 capability rows by metadata filter"; explicit `record(...)` can't be slotted into a downstream `class Scenario(SQLModel, table=True)` without changing every CRUD function.
+
+#### Actor + intent flow through Python `contextvars`
+
+`audit/context.py` exposes `actor_var: ContextVar[CurrentActor | None]` and `intent_var: ContextVar[IntentContext | None]`. Both are set by `AuditContextMiddleware` at the top of every HTTP request. `record(...)` and the mapper listeners read them as defaults when the caller does not pass explicit values. This avoids threading `actor_id` and `intent_hash` through every service signature.
+
+Asyncio-friendly by construction: `await` and `asyncio.TaskGroup` propagate contextvars correctly. `BackgroundTasks` inherits the request's contextvars at enqueue time. Workers (future `arq` epic) MUST set `actor_var` from the serialised job context before invoking the handler — the contract is documented here so the future change has a foundation to honour.
+
+#### Sensitive-field redaction is layered
+
+A global denylist lives in `audit/redact.py`:
+
+```python
+GLOBAL_REDACT: frozenset[str] = frozenset({
+    "password_hash", "token_hash", "api_key_hash", "key_hash",
+    "client_secret", "raw_token",
+})
+```
+
+Downstream models extend (never replace) the denylist via the `__audit_redact__` class attribute on an `AuditedModel` subclass, or via the `extra_intent_metadata=` parameter on a `record(...)` call. Redacted keys are replaced with the literal value `"<redacted>"` so presence-of-key remains observable — useful for "did the field exist on this revision" investigations without leaking the value.
+
+#### Failure mode — silent coverage gap
+
+If a downstream developer ships a new SQLModel `table=True` class without inheriting from `AuditedModel` and without explicit `record(...)` calls, audit rows are silently absent — there is no compile-time signal of "you forgot audit". This is the largest ongoing risk this contract carries; mitigations:
+
+- `backend/src/fastsaas/audit/CLAUDE.md` is the explicit guide for Claude-driven downstream work and is loaded into context for any session in this repo or its forks.
+- A CI check that warns when a new `table=True` class doesn't inherit `AuditedModel` and isn't on an explicit allowlist is tracked as backlog (would close the gap mechanically).
+
+This amendment supersedes the original "Field-redaction list — write down in bootstrap" open question; the answer is the global denylist in code plus `__audit_redact__` extension. The CI-lint open question stays open per the failure mode above.
+
 ## References
 
 - [[../../openspec/changes/platform-saas-core-architecture-spike/design.md|Spike design.md — Decision #7]]
 - [[ADR-006_primary-keys-and-cascade]]
 - [[ADR-007_multi-tenant-isolation]]
 - [[ADR-009_actor-model-cti]]
+- [[ADR-013_authorization-capabilities-role-bundles]] — `role:compliance_officer` is the primary read consumer
+- [[../formal/stakeholders/SH-compliance-officer]] — stakeholder profile served by this contract
+- `openspec/changes/audit-trail-middleware/` — implementation of the extension contract

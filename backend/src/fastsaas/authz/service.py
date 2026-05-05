@@ -19,6 +19,7 @@ from uuid import UUID
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastsaas import audit
 from fastsaas.authz.bundles import BUNDLES, CapabilityTemplate, Scope
 from fastsaas.authz.models import Capability
 
@@ -79,6 +80,25 @@ async def mint_bundle(
             db.add(cap)
             created.append(cap)
     await db.flush()
+
+    # Emit per-cap audit rows so the compliance officer can answer "who got
+    # what, scoped to which resource". One bundle mint typically fans out
+    # to a handful of caps; the rows are cheap and the granularity matches
+    # how reads filter (`WHERE entity_type='capability' AND ...`).
+    if audit.context_present():
+        for cap in created:
+            await audit.record(
+                db,
+                action="create",
+                entity_type="capability",
+                entity_id=cap.id,
+                diff={"before": {}, "after": _cap_after(cap)},
+                organisation_id=org_id,
+                intent_metadata={
+                    "bundle_name": bundle_name,
+                    "target_actor_id": str(actor_id),
+                },
+            )
     return created
 
 
@@ -101,9 +121,32 @@ async def revoke_bundle(
             Capability.meta["org_id"].astext == str(org_id),
         )
         .values(revoked_at=now)
+        .returning(Capability.id)
     )
-    result = await db.execute(stmt)
-    return result.rowcount or 0
+    revoked_ids = [row for row in (await db.execute(stmt)).scalars().all()]
+
+    if revoked_ids and audit.context_present():
+        for cap_id in revoked_ids:
+            await audit.record(
+                db,
+                action="update",
+                entity_type="capability",
+                entity_id=cap_id,
+                diff={
+                    "before": {"revoked_at": None},
+                    "after": {
+                        "revoked_at": now.isoformat(),
+                        "revoked_by": str(revoked_by),
+                    },
+                },
+                organisation_id=org_id,
+                intent_metadata={
+                    "bundle_name": bundle_name,
+                    "target_actor_id": str(actor_id),
+                    "revoked_by": str(revoked_by),
+                },
+            )
+    return len(revoked_ids)
 
 
 async def mint_capability(
@@ -144,6 +187,20 @@ async def mint_capability(
     )
     db.add(cap)
     await db.flush()
+
+    if audit.context_present():
+        await audit.record(
+            db,
+            action="create",
+            entity_type="capability",
+            entity_id=cap.id,
+            diff={"before": {}, "after": _cap_after(cap)},
+            organisation_id=org_id,
+            intent_metadata={
+                "bundle_name": bundle_name,
+                "target_actor_id": str(actor_id),
+            },
+        )
     return cap
 
 
@@ -159,9 +216,45 @@ async def revoke_capability(
         update(Capability)
         .where(Capability.id == capability_id, Capability.revoked_at.is_(None))
         .values(revoked_at=now)
+        .returning(Capability.id, Capability.meta)
     )
-    result = await db.execute(stmt)
-    return result.rowcount or 0
+    rows = (await db.execute(stmt)).all()
+    if not rows:
+        return 0
+
+    if audit.context_present():
+        cap_id, meta = rows[0]
+        org_id_str = meta.get("org_id") if isinstance(meta, dict) else None
+        await audit.record(
+            db,
+            action="update",
+            entity_type="capability",
+            entity_id=cap_id,
+            diff={
+                "before": {"revoked_at": None},
+                "after": {
+                    "revoked_at": now.isoformat(),
+                    "revoked_by": str(revoked_by),
+                },
+            },
+            organisation_id=UUID(org_id_str) if org_id_str else None,
+            intent_metadata={"revoked_by": str(revoked_by)},
+        )
+    return len(rows)
+
+
+def _cap_after(cap: Capability) -> dict[str, Any]:
+    return {
+        "id": str(cap.id),
+        "actor_id": str(cap.actor_id),
+        "operation": cap.operation,
+        "resource_type": cap.resource_type,
+        "resource_id": str(cap.resource_id) if cap.resource_id else None,
+        "bundle_name": cap.bundle_name,
+        "granted_by": str(cap.granted_by) if cap.granted_by else None,
+        "expires_at": cap.expires_at.isoformat() if cap.expires_at else None,
+        "meta": cap.meta,
+    }
 
 
 def _resolve_targets(
