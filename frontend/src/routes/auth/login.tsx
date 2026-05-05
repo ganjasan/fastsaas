@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 
 import { useLoginAuthLoginPost, useMeAuthMeGet } from "@/api/generated/auth/auth";
@@ -12,6 +12,17 @@ import { type LoginInput, loginSchema } from "@/features/auth/lib/schemas";
 import type { ApiError } from "@/lib/api/client";
 
 export const Route = createFileRoute("/auth/login")({
+  // If the user is already signed in, sending them to the login form is
+  // dead-end UX; bounce them into the dashboard. Caveat: the in-memory
+  // access token is empty on hard reload (per ADR-008 hybrid storage), so
+  // a freshly-reloaded already-authenticated user still sees the login
+  // form once. A follow-up can wire `refreshFlow` on app boot to bridge
+  // that gap.
+  beforeLoad: () => {
+    if (useAuthStore.getState().accessToken !== null) {
+      throw redirect({ to: "/orgs" });
+    }
+  },
   component: LoginPage,
 });
 

@@ -1,16 +1,22 @@
-import { createFileRoute } from "@tanstack/react-router";
+/**
+ * `/` — root entry point.
+ *
+ * Redirects based on auth state:
+ * - Unauthenticated → `/auth/login`.
+ * - Authenticated → `/orgs` (the org-list page handles its own pin/empty
+ *   state and forwards into the active org from there).
+ *
+ * The redirect runs in `beforeLoad` so the user never sees an intermediate
+ * placeholder. The auth store is in-memory (per ADR-008 hybrid storage),
+ * so the read here is synchronous — no flicker.
+ */
+import { createFileRoute, redirect } from "@tanstack/react-router";
+
+import { useAuthStore } from "@/features/auth/lib/authStore";
 
 export const Route = createFileRoute("/")({
-  component: HelloPage,
+  beforeLoad: () => {
+    const token = useAuthStore.getState().accessToken;
+    throw redirect({ to: token ? "/orgs" : "/auth/login" });
+  },
 });
-
-function HelloPage() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
-      <div className="space-y-2 text-center">
-        <h1 className="text-4xl font-semibold tracking-tight">FastSaaS</h1>
-        <p className="text-muted-foreground">platform skeleton — sub-issue #2 bootstrap</p>
-      </div>
-    </main>
-  );
-}
