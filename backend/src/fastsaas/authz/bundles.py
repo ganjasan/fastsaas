@@ -26,6 +26,11 @@ class Operation(StrEnum):
     SHARE = "share"
     GRANT = "grant"
     SCRUB = "scrub"
+    # Platform-level (cross-org) staff authority. Reserved for the
+    # `(PLATFORM_ADMIN, PLATFORM)` pair only; never appears in any role
+    # bundle template — staffness is structural (actors.is_platform_staff),
+    # not bundle-granted. See ADR-019.
+    PLATFORM_ADMIN = "platform_admin"
 
 
 class ResourceType(StrEnum):
@@ -36,6 +41,9 @@ class ResourceType(StrEnum):
     AGENT = "agent"
     SERVICE = "service"
     WILDCARD = "*"
+    # Cross-org staff resource. Always paired with `Operation.PLATFORM_ADMIN`;
+    # `can()` short-circuits this combination against `actors.is_platform_staff`.
+    PLATFORM = "platform"
 
 
 class Scope(StrEnum):

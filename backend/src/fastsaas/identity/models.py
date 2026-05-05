@@ -48,6 +48,18 @@ class Actor(SQLModel, table=True):
         sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("actors.id"), nullable=True),
     )
     display_name: str = Field(sa_column=Column(String, nullable=False))
+    # Platform-staff flag (per ADR-019): structural cross-org authority,
+    # toggled out-of-band via `make seed-platform-staff`. The `can()`
+    # short-circuit reads this column for `(PLATFORM_ADMIN, PLATFORM)`
+    # checks; org-level capabilities are unaffected.
+    is_platform_staff: bool = Field(
+        default=False,
+        sa_column=Column(
+            "is_platform_staff",
+            nullable=False,
+            server_default=text("FALSE"),
+        ),
+    )
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     )

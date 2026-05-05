@@ -9,6 +9,13 @@
 import { useRouterState } from "@tanstack/react-router";
 
 const SECTION_FROM_PATH: Array<[RegExp, string]> = [
+  [/\/admin\/orgs\/?$/, "Orgs"],
+  [/\/admin\/metrics\/?$/, "Metrics"],
+  [/\/admin\/health\/?$/, "Health"],
+  [/\/admin\/design-system\/?$/, "Design system"],
+  [/\/admin\/auth\/?$/, "Auth"],
+  [/\/admin\/oauth\/?$/, "OAuth providers"],
+  [/\/admin\/?$/, "Admin"],
   [/\/orgs\/[^/]+\/settings\/members$/, "Members"],
   [/\/orgs\/[^/]+\/settings\/branding$/, "Branding"],
   [/\/orgs\/[^/]+\/settings$/, "Settings"],

@@ -38,13 +38,35 @@ async def can(
     - `resource_id` is either NULL (type-wide grant) or equals the requested id, AND
     - `revoked_at IS NULL` and `expires_at IS NULL OR expires_at > now`, AND
     - `policy_blocked = FALSE`.
+
+    The `(PLATFORM_ADMIN, PLATFORM)` combination is structural rather than
+    bundle-granted — it short-circuits to `actors.is_platform_staff` and
+    never consults the capabilities table. See ADR-019.
     """
     op = operation.value if isinstance(operation, Operation) else operation
     rt = resource_type.value if isinstance(resource_type, ResourceType) else resource_type
 
+    if rt == ResourceType.PLATFORM.value:
+        return await _is_platform_staff(actor_id, db=db)
+
     caps = await _load_active_capabilities(actor_id, db=db, cache=cache)
     now = datetime.now(UTC)
     return any(_matches(c, op, rt, resource_id, now) for c in caps)
+
+
+async def _is_platform_staff(actor_id: UUID, *, db: AsyncSession) -> bool:
+    """Read `actors.is_platform_staff` for the given actor. Pinned via the
+    same `app.current_actor` GUC the capability self-read uses."""
+    await db.execute(
+        text("SELECT set_config('app.current_actor', :id, true)"),
+        {"id": str(actor_id)},
+    )
+    result = await db.execute(
+        text("SELECT is_platform_staff FROM actors WHERE id = :id"),
+        {"id": str(actor_id)},
+    )
+    row = result.one_or_none()
+    return bool(row[0]) if row is not None else False
 
 
 def _matches(

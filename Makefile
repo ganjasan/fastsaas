@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help dev down test backend.test frontend.test lint backend.lint frontend.lint migrate openapi codegen gen-jwt-keys
+.PHONY: help dev down test backend.test frontend.test lint backend.lint frontend.lint migrate openapi codegen gen-jwt-keys seed-platform-staff
 
 help:
 	@echo "FastSaaS platform — common dev tasks"
@@ -13,6 +13,7 @@ help:
 	@echo "  make lint              backend ruff + frontend lint"
 	@echo "  make openapi           dump openapi.json from backend"
 	@echo "  make codegen           regenerate frontend/src/api/generated/ from openapi.json"
+	@echo "  make seed-platform-staff USER_EMAIL=...  flip is_platform_staff=TRUE on a user actor"
 
 dev:
 	docker compose up -d
@@ -46,6 +47,13 @@ openapi:
 
 codegen: openapi
 	cd frontend && npm run codegen
+
+seed-platform-staff:
+	@if [ -z "$(USER_EMAIL)" ]; then \
+		echo "usage: make seed-platform-staff USER_EMAIL=alice@example.com"; \
+		exit 2; \
+	fi
+	cd backend && uv run python -m fastsaas.scripts.seed_platform_staff "$(USER_EMAIL)"
 
 gen-jwt-keys:
 	@kid=$${KID:-dev-1}; \

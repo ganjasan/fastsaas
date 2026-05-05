@@ -123,3 +123,18 @@ class TestBundleCatalogue:
             if any(t.operation is Operation.SCRUB for t in templates)
         }
         assert bundles_with_scrub == {"role:dpo"}
+
+    def test_no_bundle_carries_platform_admin(self) -> None:
+        # GIVEN every bundle
+        # WHEN scanning for templates with Operation.PLATFORM_ADMIN
+        # THEN no bundle declares it — platform-staff authority is
+        #      structural (actors.is_platform_staff), not bundle-granted.
+        #      A regression here would mean a casual `mint_bundle` could
+        #      mint cross-org platform access; staffness must stay
+        #      out-of-band.
+        bundles_with_platform = {
+            name
+            for name, templates in BUNDLES.items()
+            if any(t.operation is Operation.PLATFORM_ADMIN for t in templates)
+        }
+        assert bundles_with_platform == set()

@@ -34,6 +34,20 @@ export const ActorType = {
   SERVICE: 'SERVICE',
 } as const;
 
+export type AdminMeResponseEmail = string | null;
+
+/**
+ * Returned by `GET /admin/me`. Used by the frontend to gate the
+AdminShell — non-staff actors get 403 from the dependency before this
+type is ever serialised, so `is_platform_staff` is always True here.
+ */
+export interface AdminMeResponse {
+  actor_id: string;
+  email: AdminMeResponseEmail;
+  display_name: string;
+  is_platform_staff: boolean;
+}
+
 export type CurrentActorParentActorId = string | null;
 
 export interface CurrentActor {
