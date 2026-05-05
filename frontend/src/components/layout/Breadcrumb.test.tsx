@@ -26,13 +26,13 @@ describe("Breadcrumb", () => {
     ["/orgs/acme/settings/members", "Members"],
     ["/orgs/acme/settings/branding", "Branding"],
   ])("path %s → label %s", (path, expected) => {
-    mockedUseRouterState.mockReturnValue(path);
+    mockedUseRouterState.mockReturnValue(path as never);
     render(<Breadcrumb />);
     expect(screen.getByText(expected)).toBeInTheDocument();
   });
 
   it("renders nothing for unrecognised paths", () => {
-    mockedUseRouterState.mockReturnValue("/orgs");
+    mockedUseRouterState.mockReturnValue("/orgs" as never);
     const { container } = render(<Breadcrumb />);
     expect(container).toBeEmptyDOMElement();
   });
