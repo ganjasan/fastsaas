@@ -86,3 +86,40 @@ class TestBundleCatalogue:
         only = templates[0]
         assert only.operation is Operation.READ
         assert only.resource_type is ResourceType.AUDIT_LOG
+
+    def test_dpo_carries_read_and_scrub_on_audit_log_only(self) -> None:
+        # GIVEN role:dpo (Data Protection Officer)
+        # WHEN inspecting its templates
+        # THEN it has exactly two templates — read + scrub on audit_log,
+        #      both self-scoped. Drift here would either leak scrub into
+        #      another bundle (compliance officer would gain erase rights)
+        #      or grant the DPO operational mutation rights they should
+        #      not have under GDPR Art.38(3).
+        templates = BUNDLES["role:dpo"]
+        assert len(templates) == 2
+        ops_resources = {(t.operation, t.resource_type) for t in templates}
+        assert ops_resources == {
+            (Operation.READ, ResourceType.AUDIT_LOG),
+            (Operation.SCRUB, ResourceType.AUDIT_LOG),
+        }
+
+    def test_compliance_officer_does_not_carry_scrub(self) -> None:
+        # GIVEN role:compliance_officer
+        # WHEN scanning its operations
+        # THEN scrub is never granted — the read-vs-erase split is the
+        #      core GDPR control separation. A regression here would
+        #      collapse the two roles silently.
+        ops = {t.operation for t in BUNDLES["role:compliance_officer"]}
+        assert Operation.SCRUB not in ops
+
+    def test_only_dpo_bundle_carries_scrub(self) -> None:
+        # GIVEN every bundle
+        # WHEN scanning for templates with Operation.SCRUB
+        # THEN exactly one bundle (role:dpo) declares it — scrub is a
+        #      narrow capability and should not creep into ops/admin/etc.
+        bundles_with_scrub = {
+            name
+            for name, templates in BUNDLES.items()
+            if any(t.operation is Operation.SCRUB for t in templates)
+        }
+        assert bundles_with_scrub == {"role:dpo"}

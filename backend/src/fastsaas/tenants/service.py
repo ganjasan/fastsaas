@@ -226,6 +226,7 @@ _INVITE_ROLES: frozenset[OrganisationRole] = frozenset(
         OrganisationRole.MEMBER,
         OrganisationRole.VIEWER,
         OrganisationRole.COMPLIANCE_OFFICER,
+        OrganisationRole.DPO,
     }
 )
 

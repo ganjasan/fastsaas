@@ -144,6 +144,7 @@ export const OrganisationRole = {
   member: 'member',
   viewer: 'viewer',
   compliance_officer: 'compliance_officer',
+  dpo: 'dpo',
 } as const;
 
 export interface PasswordResetConsumeBody {
@@ -254,6 +255,11 @@ export interface RoleChangeRequest {
   role: OrganisationRole;
 }
 
+export interface ScrubResult {
+  rows_scrubbed: number;
+  dry_run: boolean;
+}
+
 export interface TokensResponse {
   access_token: string;
   token_type?: string;
@@ -298,6 +304,8 @@ export type OauthCallbackAuthOauthProviderCallbackGetParams = {
 code: string;
 state: string;
 };
+
+export type ScrubAuditLogOrgsSlugAuditScrubPostBody = { [key: string]: unknown };
 
 export type HealthHealthGet200 = {[key: string]: string};
 
