@@ -298,6 +298,36 @@ export interface ScrubResult {
   dry_run: boolean;
 }
 
+/**
+ * Group of hits sharing an entity_type, labelled for UI.
+ */
+export interface SearchGroup {
+  entity_type: string;
+  label: string;
+  hits: SearchHit[];
+}
+
+export type SearchHitSubtitle = string | null;
+
+/**
+ * One result row, produced by exactly one `SearchProvider`.
+ */
+export interface SearchHit {
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  subtitle?: SearchHitSubtitle;
+  href: string;
+}
+
+/**
+ * Aggregate envelope returned by `GET /search`.
+ */
+export interface SearchResponse {
+  query: string;
+  groups: SearchGroup[];
+}
+
 export type ThemeModeDefault = typeof ThemeModeDefault[keyof typeof ThemeModeDefault];
 
 
@@ -370,6 +400,17 @@ state: string;
 };
 
 export type ScrubAuditLogOrgsSlugAuditScrubPostBody = { [key: string]: unknown };
+
+export type SearchEndpointOrgsSlugSearchGetParams = {
+/**
+ * Substring query — minimum 2 characters
+ */
+q: string;
+/**
+ * Comma-separated list of entity_types to query (e.g. `projects,members`). Default: all registered.
+ */
+kinds?: string | null;
+};
 
 export type HealthHealthGet200 = {[key: string]: string};
 

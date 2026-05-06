@@ -21,6 +21,9 @@ import { SearchTrigger } from "@/components/layout/SearchTrigger";
 import { type NavSection, Shell } from "@/components/layout/Shell";
 import { SidebarBottomChrome } from "@/components/layout/SidebarBottomChrome";
 import { UserMenu } from "@/components/layout/UserMenu";
+import "@/features/search"; // side-effect: foundation registrations
+import { CommandPalette } from "@/features/search/components/CommandPalette";
+import { CommandPaletteHotkey } from "@/features/search/components/CommandPaletteHotkey";
 
 interface AdminShellProps {
   children: ReactNode;
@@ -59,6 +62,8 @@ export function AdminShell({ children }: AdminShellProps): ReactNode {
         </>
       }
     >
+      <CommandPaletteHotkey />
+      <CommandPalette workspaceSlug="" shell="admin" />
       {children}
     </Shell>
   );
