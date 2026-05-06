@@ -6,7 +6,7 @@ Read it before you write code.
 
 ## What FastSaaS is
 
-A starter kit for SaaS products. Three foundation layers that downstream
+A starter kit for SaaS products. Four foundation layers that downstream
 business code stands on:
 
 1. **Identity** — actors (HUMAN / AGENT / SERVICE per the CTI model in
@@ -22,6 +22,13 @@ business code stands on:
    and intent. Every domain mutation produces a row in the same
    transaction. See `backend/src/fastsaas/audit/CLAUDE.md` for the full
    extension contract.
+4. **Search** — `SearchProvider` registry + ⌘K palette. Each domain
+   entity that should be findable registers a backend `SearchProvider`
+   (one per `entity_type`) and a frontend renderer. The orchestrator
+   at `/orgs/{slug}/search` fans out across providers in parallel,
+   gates each via `is_visible()`, and aggregates the response. See
+   `backend/src/fastsaas/search/CLAUDE.md` and
+   `frontend/src/features/search/CLAUDE.md`.
 
 Your domain (scenarios, analyses, properties, model runs, …) sits **on
 top** of these layers. The foundation does not know about your domain;
@@ -61,6 +68,10 @@ pass.
   `await audit.record(db, ...)` explicitly inside the same transaction
   as the mutation. Skipping audit is the most expensive class of bug
   this codebase can ship.
+- **Every user-facing entity registers a `SearchProvider`.** End users
+  expect to type a name into ⌘K and find it. Skipping registration is
+  a silent coverage gap — see `backend/src/fastsaas/search/CLAUDE.md`
+  for the recipe (and the matching frontend renderer).
 
 ## Where to look
 
@@ -79,7 +90,11 @@ pass.
 - `openspec/specs/` — current capability specs (synced when changes
   archive).
 - `backend/src/fastsaas/<module>/CLAUDE.md` — module-level guides where
-  the contract is non-trivial. Always present for `audit/`.
+  the contract is non-trivial. Always present for `audit/` and
+  `search/`.
+- `frontend/src/features/<module>/CLAUDE.md` — frontend module guides.
+  `features/search/` carries the renderer/page/action contract for the
+  ⌘K palette.
 
 ## Recipes
 
@@ -175,6 +190,43 @@ class ScenarioService:
 For non-CRUD operations (mass-revoke, fan-out, soft-delete with cascade),
 call `audit.record(...)` explicitly — see `audit/CLAUDE.md`.
 
+### Add a SearchProvider for a new entity
+
+```python
+# backend/src/fastsaas/<your_domain>/search.py
+from fastsaas.authz import Operation, ResourceType, can
+from fastsaas.search import SearchHit, SearchProvider, register_provider
+
+
+class ScenarioSearchProvider:
+    entity_type = "scenario"
+    label = "Scenarios"
+
+    async def is_visible(self, *, actor, org_id, is_guest, db, cache) -> bool:
+        return await can(
+            actor.actor_id, Operation.READ, ResourceType.SCENARIO, org_id,
+            db=db, cache=cache,
+        )
+
+    async def search(self, *, query, actor, org_id, limit, db) -> list[SearchHit]:
+        ...  # ILIKE on name/slug, build href via org slug
+
+
+register_provider(ScenarioSearchProvider())
+```
+
+Plus a one-line frontend renderer registration:
+
+```ts
+// frontend/src/features/scenarios/index.ts
+import { registerRenderer } from "@/features/search";
+registerRenderer("scenario", ScenarioRenderer);
+```
+
+See `backend/src/fastsaas/search/CLAUDE.md` and
+`frontend/src/features/search/CLAUDE.md` for full guidance — gate
+patterns, naming conventions, what NOT to do.
+
 ### Add a vitest case (frontend)
 
 ```ts
@@ -204,3 +256,9 @@ Always read these before extending the module:
 - `backend/src/fastsaas/audit/CLAUDE.md` — audit core extension contract,
   decision tree (mixin vs explicit), recipes for downstream entities and
   non-CRUD operations, what NOT to do.
+- `backend/src/fastsaas/search/CLAUDE.md` — search foundation extension
+  contract, decision tree, gate patterns (Pattern A: org-scoped cap,
+  Pattern B: per-resource JOIN, Pattern C: members-only), entity_type
+  conventions, what NOT to do.
+- `frontend/src/features/search/CLAUDE.md` — frontend renderer + page +
+  action registries; mounting recipes for downstream features.

@@ -1,22 +1,21 @@
 /**
- * Search trigger — placeholder no-op for v1. The button shows the `⌘K`
- * shortcut hint and matches the Render aesthetic; clicking it does nothing
- * yet. The real command palette is its own epic; this component pins the
- * surface so the future palette ships behind a familiar trigger.
+ * Search trigger — opens the global ⌘K palette. The button shows the
+ * shortcut hint and matches the Render aesthetic; Cmd/Ctrl+K opens
+ * the same palette via `<CommandPaletteHotkey>`.
  */
 import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useSearchStore } from "@/features/search";
 
 export function SearchTrigger() {
+  const setOpen = useSearchStore((s) => s.setOpen);
   return (
     <Button
       variant="outline"
       size="sm"
       className="hidden h-8 gap-2 px-3 text-muted-foreground hover:text-foreground sm:inline-flex"
-      onClick={() => {
-        // TODO: open command palette (separate epic).
-      }}
+      onClick={() => setOpen(true)}
       aria-label="Search"
     >
       <Search className="h-4 w-4" />

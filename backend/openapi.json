@@ -1563,6 +1563,78 @@
         }
       }
     },
+    "/orgs/{slug}/search": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Endpoint",
+        "description": "Aggregate search across all registered SearchProviders for the\nactor's active workspace. Each provider is gated through `can()`\nusing its declared `(operation, resource_type)`; failed gate \u2192 group\nomitted. A provider raising during search \u2192 group omitted (with a\nserver-side warning); the rest of the response returns normally.",
+        "operationId": "search_endpoint_orgs__slug__search_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Substring query \u2014 minimum 2 characters",
+              "title": "Q"
+            },
+            "description": "Substring query \u2014 minimum 2 characters"
+          },
+          {
+            "name": "kinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of entity_types to query (e.g. `projects,members`). Default: all registered.",
+              "title": "Kinds"
+            },
+            "description": "Comma-separated list of entity_types to query (e.g. `projects,members`). Default: all registered."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -2443,6 +2515,96 @@
           "dry_run"
         ],
         "title": "ScrubResult"
+      },
+      "SearchGroup": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            },
+            "type": "array",
+            "title": "Hits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "label",
+          "hits"
+        ],
+        "title": "SearchGroup",
+        "description": "Group of hits sharing an entity_type, labelled for UI."
+      },
+      "SearchHit": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "title",
+          "href"
+        ],
+        "title": "SearchHit",
+        "description": "One result row, produced by exactly one `SearchProvider`."
+      },
+      "SearchResponse": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/SearchGroup"
+            },
+            "type": "array",
+            "title": "Groups"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "groups"
+        ],
+        "title": "SearchResponse",
+        "description": "Aggregate envelope returned by `GET /search`."
       },
       "ThemeModeDefault": {
         "type": "string",

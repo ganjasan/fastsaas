@@ -22,6 +22,7 @@ from fastsaas.api.projects import (
 from fastsaas.api.projects import (
     router as projects_router,
 )
+from fastsaas.api.search import router as search_router
 from fastsaas.audit import AuditContextMiddleware
 from fastsaas.cache import close_redis, get_redis
 from fastsaas.config import get_settings
@@ -52,6 +53,7 @@ app.include_router(projects_router)
 app.include_router(projects_accept_share_router)
 app.include_router(audit_router)
 app.include_router(admin_router)
+app.include_router(search_router)
 
 
 @app.get("/health")

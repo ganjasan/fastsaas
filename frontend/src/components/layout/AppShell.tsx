@@ -20,6 +20,9 @@ import { useDashboardSections } from "@/components/layout/dashboardNav";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSwitcher } from "@/features/orgs/components/WorkspaceSwitcher";
 import { useOrgStore } from "@/features/orgs/lib/orgStore";
+import "@/features/search"; // side-effect: foundation registrations
+import { CommandPalette } from "@/features/search/components/CommandPalette";
+import { CommandPaletteHotkey } from "@/features/search/components/CommandPaletteHotkey";
 
 interface AppShellProps {
   children: ReactNode;
@@ -49,6 +52,8 @@ export function AppShell({ children }: AppShellProps): ReactNode {
         </>
       }
     >
+      <CommandPaletteHotkey />
+      <CommandPalette workspaceSlug={slug} shell="app" />
       {children}
     </Shell>
   );
