@@ -178,10 +178,23 @@ class ProjectShareRequest(BaseModel):
 
 
 class ProjectShareResponse(BaseModel):
+    """Returned by `POST /orgs/{slug}/projects/{slug}/shares`.
+
+    `raw_token` is the one-time disclosure of the share token: the backend
+    only stores `sha256(token)`, so this is the operator's single chance to
+    copy the invite link before navigating away. The token is also delivered
+    to the recipient via email; this field gives the inviting admin the
+    same link so they can paste it into a private channel out-of-band.
+
+    `ProjectShareItem` (used by `GET /shares`) deliberately omits this
+    field — the raw token is irrecoverable once this response is gone.
+    """
+
     id: UUID
     project_id: UUID
     email: str
     expires_at: datetime
+    raw_token: str
 
 
 class ProjectShareItem(BaseModel):

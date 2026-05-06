@@ -298,6 +298,7 @@ async def share_project(
         project_id=share.project_id,
         email=share.email,
         expires_at=share.expires_at,
+        raw_token=raw,
     )
 
 

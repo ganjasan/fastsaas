@@ -556,3 +556,74 @@ async def test_revoke_consumed_share_revokes_capability(
     )
     assert r.status_code == 404
     assert r.json()["detail"]["code"] == "org.not_found_or_forbidden"
+
+
+
+async def test_share_response_carries_raw_token_matching_email(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN an owner shares a project WHEN POST /shares returns 201 THEN response.raw_token equals the token in the email link.
+
+    Per #30 the create response includes a one-time disclosure of the raw
+    token so the operator UI can show a copyable invite link without
+    digging through the recipient's mailbox.
+    """
+    pw = "correct horse battery staple"
+    owner_access = await _register_and_login(client, mailhog, _email(), pw)
+    r = await client.post(
+        "/orgs",
+        json={"name": "Acme", "slug": "acme"},
+        headers={"Authorization": f"Bearer {owner_access}"},
+    )
+    assert r.status_code == 201
+    r = await client.post(
+        "/orgs/acme/projects",
+        json={"name": "Alpha", "slug": "alpha", "description": None},
+        headers={"Authorization": f"Bearer {owner_access}"},
+    )
+    assert r.status_code == 201
+    await mailhog.delete("/api/v1/messages")
+
+    r = await client.post(
+        "/orgs/acme/projects/alpha/shares",
+        json={"email": _email(), "ttl_days": 7},
+        headers={"Authorization": f"Bearer {owner_access}"},
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    raw_token = body["raw_token"]
+    assert isinstance(raw_token, str) and len(raw_token) >= 32
+
+    msgs = (await mailhog.get("/api/v2/messages")).json()
+    assert msgs["count"] >= 1
+    email_token = _token_from_link(_link_from_mail(msgs["items"][0]["Content"]["Body"]))
+    assert email_token == raw_token
+
+
+async def test_share_list_response_omits_raw_token(
+    client: AsyncClient, redis_client: Any, wipe_state: None, mailhog: AsyncClient
+) -> None:
+    """GIVEN an owner has created a share WHEN GET /shares lists pending THEN no raw_token is disclosed (token-hash is irrecoverable)."""
+    pw = "correct horse battery staple"
+    owner_access = await _register_and_login(client, mailhog, _email(), pw)
+    await client.post("/orgs", json={"name": "Acme", "slug": "acme"}, headers={"Authorization": f"Bearer {owner_access}"})
+    await client.post(
+        "/orgs/acme/projects",
+        json={"name": "Alpha", "slug": "alpha", "description": None},
+        headers={"Authorization": f"Bearer {owner_access}"},
+    )
+    await mailhog.delete("/api/v1/messages")
+    await client.post(
+        "/orgs/acme/projects/alpha/shares",
+        json={"email": _email(), "ttl_days": 7},
+        headers={"Authorization": f"Bearer {owner_access}"},
+    )
+
+    r = await client.get(
+        "/orgs/acme/projects/alpha/shares",
+        headers={"Authorization": f"Bearer {owner_access}"},
+    )
+    assert r.status_code == 200, r.text
+    items = r.json()
+    assert len(items) == 1
+    assert "raw_token" not in items[0]
