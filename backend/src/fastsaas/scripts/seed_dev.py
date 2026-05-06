@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from fastsaas.config import get_settings
@@ -87,6 +87,18 @@ async def seed() -> None:
                 actor = await _create_actor(s, email=email, display_name=display)
                 actor_ids[email] = str(actor.id)
 
+            # Dev-only convenience: promote the founder to platform staff so
+            # `/admin/*` is reachable out of the box. Production deployments
+            # bootstrap via `make seed-platform-staff USER_EMAIL=...` per
+            # ADR-019; the dev seed predefines the operator identity, so the
+            # equivalent flip happens here without an extra step.
+            await s.execute(
+                text(
+                    "UPDATE actors SET is_platform_staff = TRUE WHERE id = :id"
+                ),
+                {"id": actor_ids[SEED_USERS[0][0]]},
+            )
+
         # ── Org + projects (owner) ────────────────────────────────────────
         founder_email, _, _ = SEED_USERS[0]
         founder_id = actor_ids[founder_email]
@@ -126,7 +138,8 @@ async def seed() -> None:
         print(f"  Projects: {', '.join(slug for slug, _ in SEED_PROJECTS)}")
         print(f"  Users (password '{SEED_PASSWORD}'):")
         for email, _display, role in SEED_USERS:
-            print(f"    {email:32s} ({role.value})")
+            extra = " [PLATFORM STAFF]" if email == SEED_USERS[0][0] else ""
+            print(f"    {email:32s} ({role.value}){extra}")
     finally:
         await eng.dispose()
 
