@@ -25,6 +25,13 @@ describe("Breadcrumb", () => {
     ["/orgs/acme/settings", "Settings"],
     ["/orgs/acme/settings/members", "Members"],
     ["/orgs/acme/settings/branding", "Branding"],
+    ["/admin", "Admin"],
+    ["/admin/orgs", "Orgs"],
+    ["/admin/metrics", "Metrics"],
+    ["/admin/health", "Health"],
+    ["/admin/design-system", "Design system"],
+    ["/admin/auth", "Auth"],
+    ["/admin/oauth", "OAuth providers"],
   ])("path %s → label %s", (path, expected) => {
     mockedUseRouterState.mockReturnValue(path as never);
     render(<Breadcrumb />);

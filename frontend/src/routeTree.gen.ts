@@ -9,12 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OrgsIndexRouteImport } from './routes/orgs/index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as OrgsNewRouteImport } from './routes/orgs/new'
 import { Route as OrgsSlugRouteImport } from './routes/orgs/$slug'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AdminOrgsRouteImport } from './routes/admin.orgs'
+import { Route as AdminOauthRouteImport } from './routes/admin.oauth'
+import { Route as AdminMetricsRouteImport } from './routes/admin.metrics'
+import { Route as AdminHealthRouteImport } from './routes/admin.health'
+import { Route as AdminDesignSystemRouteImport } from './routes/admin.design-system'
+import { Route as AdminAuthRouteImport } from './routes/admin.auth'
 import { Route as OrgsSlugIndexRouteImport } from './routes/orgs/$slug.index'
 import { Route as OrgsAcceptShareTokenRouteImport } from './routes/orgs/accept-share.$token'
 import { Route as OrgsAcceptInviteTokenRouteImport } from './routes/orgs/accept-invite.$token'
@@ -27,6 +35,11 @@ import { Route as OrgsSlugSettingsMembersRouteImport } from './routes/orgs/$slug
 import { Route as OrgsSlugSettingsBrandingRouteImport } from './routes/orgs/$slug.settings.branding'
 import { Route as OrgsSlugProjectsProjectSlugRouteImport } from './routes/orgs/$slug.projects.$projectSlug'
 
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -36,6 +49,11 @@ const OrgsIndexRoute = OrgsIndexRouteImport.update({
   id: '/orgs/',
   path: '/orgs/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const OrgsNewRoute = OrgsNewRouteImport.update({
   id: '/orgs/new',
@@ -56,6 +74,36 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/auth/login',
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminOrgsRoute = AdminOrgsRouteImport.update({
+  id: '/orgs',
+  path: '/orgs',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOauthRoute = AdminOauthRouteImport.update({
+  id: '/oauth',
+  path: '/oauth',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminMetricsRoute = AdminMetricsRouteImport.update({
+  id: '/metrics',
+  path: '/metrics',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminHealthRoute = AdminHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminDesignSystemRoute = AdminDesignSystemRouteImport.update({
+  id: '/design-system',
+  path: '/design-system',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAuthRoute = AdminAuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => AdminRoute,
 } as any)
 const OrgsSlugIndexRoute = OrgsSlugIndexRouteImport.update({
   id: '/',
@@ -117,10 +165,18 @@ const OrgsSlugProjectsProjectSlugRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/admin/auth': typeof AdminAuthRoute
+  '/admin/design-system': typeof AdminDesignSystemRoute
+  '/admin/health': typeof AdminHealthRoute
+  '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/oauth': typeof AdminOauthRoute
+  '/admin/orgs': typeof AdminOrgsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/orgs/$slug': typeof OrgsSlugRouteWithChildren
   '/orgs/new': typeof OrgsNewRoute
+  '/admin/': typeof AdminIndexRoute
   '/orgs/': typeof OrgsIndexRoute
   '/auth/magic-link/$token': typeof AuthMagicLinkTokenRoute
   '/auth/reset-password/$token': typeof AuthResetPasswordTokenRoute
@@ -136,9 +192,16 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin/auth': typeof AdminAuthRoute
+  '/admin/design-system': typeof AdminDesignSystemRoute
+  '/admin/health': typeof AdminHealthRoute
+  '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/oauth': typeof AdminOauthRoute
+  '/admin/orgs': typeof AdminOrgsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/orgs/new': typeof OrgsNewRoute
+  '/admin': typeof AdminIndexRoute
   '/orgs': typeof OrgsIndexRoute
   '/auth/magic-link/$token': typeof AuthMagicLinkTokenRoute
   '/auth/reset-password/$token': typeof AuthResetPasswordTokenRoute
@@ -155,10 +218,18 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/admin/auth': typeof AdminAuthRoute
+  '/admin/design-system': typeof AdminDesignSystemRoute
+  '/admin/health': typeof AdminHealthRoute
+  '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/oauth': typeof AdminOauthRoute
+  '/admin/orgs': typeof AdminOrgsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/orgs/$slug': typeof OrgsSlugRouteWithChildren
   '/orgs/new': typeof OrgsNewRoute
+  '/admin/': typeof AdminIndexRoute
   '/orgs/': typeof OrgsIndexRoute
   '/auth/magic-link/$token': typeof AuthMagicLinkTokenRoute
   '/auth/reset-password/$token': typeof AuthResetPasswordTokenRoute
@@ -176,10 +247,18 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
+    | '/admin/auth'
+    | '/admin/design-system'
+    | '/admin/health'
+    | '/admin/metrics'
+    | '/admin/oauth'
+    | '/admin/orgs'
     | '/auth/login'
     | '/auth/register'
     | '/orgs/$slug'
     | '/orgs/new'
+    | '/admin/'
     | '/orgs/'
     | '/auth/magic-link/$token'
     | '/auth/reset-password/$token'
@@ -195,9 +274,16 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin/auth'
+    | '/admin/design-system'
+    | '/admin/health'
+    | '/admin/metrics'
+    | '/admin/oauth'
+    | '/admin/orgs'
     | '/auth/login'
     | '/auth/register'
     | '/orgs/new'
+    | '/admin'
     | '/orgs'
     | '/auth/magic-link/$token'
     | '/auth/reset-password/$token'
@@ -213,10 +299,18 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
+    | '/admin/auth'
+    | '/admin/design-system'
+    | '/admin/health'
+    | '/admin/metrics'
+    | '/admin/oauth'
+    | '/admin/orgs'
     | '/auth/login'
     | '/auth/register'
     | '/orgs/$slug'
     | '/orgs/new'
+    | '/admin/'
     | '/orgs/'
     | '/auth/magic-link/$token'
     | '/auth/reset-password/$token'
@@ -233,6 +327,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
   OrgsSlugRoute: typeof OrgsSlugRouteWithChildren
@@ -247,6 +342,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -260,6 +362,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/orgs/'
       preLoaderRoute: typeof OrgsIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/orgs/new': {
       id: '/orgs/new'
@@ -288,6 +397,48 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/login'
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/orgs': {
+      id: '/admin/orgs'
+      path: '/orgs'
+      fullPath: '/admin/orgs'
+      preLoaderRoute: typeof AdminOrgsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/oauth': {
+      id: '/admin/oauth'
+      path: '/oauth'
+      fullPath: '/admin/oauth'
+      preLoaderRoute: typeof AdminOauthRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/metrics': {
+      id: '/admin/metrics'
+      path: '/metrics'
+      fullPath: '/admin/metrics'
+      preLoaderRoute: typeof AdminMetricsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/health': {
+      id: '/admin/health'
+      path: '/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AdminHealthRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/design-system': {
+      id: '/admin/design-system'
+      path: '/design-system'
+      fullPath: '/admin/design-system'
+      preLoaderRoute: typeof AdminDesignSystemRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/auth': {
+      id: '/admin/auth'
+      path: '/auth'
+      fullPath: '/admin/auth'
+      preLoaderRoute: typeof AdminAuthRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/orgs/$slug/': {
       id: '/orgs/$slug/'
@@ -369,6 +520,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminAuthRoute: typeof AdminAuthRoute
+  AdminDesignSystemRoute: typeof AdminDesignSystemRoute
+  AdminHealthRoute: typeof AdminHealthRoute
+  AdminMetricsRoute: typeof AdminMetricsRoute
+  AdminOauthRoute: typeof AdminOauthRoute
+  AdminOrgsRoute: typeof AdminOrgsRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAuthRoute: AdminAuthRoute,
+  AdminDesignSystemRoute: AdminDesignSystemRoute,
+  AdminHealthRoute: AdminHealthRoute,
+  AdminMetricsRoute: AdminMetricsRoute,
+  AdminOauthRoute: AdminOauthRoute,
+  AdminOrgsRoute: AdminOrgsRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 interface OrgsSlugSettingsRouteChildren {
   OrgsSlugSettingsBrandingRoute: typeof OrgsSlugSettingsBrandingRoute
   OrgsSlugSettingsMembersRoute: typeof OrgsSlugSettingsMembersRoute
@@ -402,6 +575,7 @@ const OrgsSlugRouteWithChildren = OrgsSlugRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
   OrgsSlugRoute: OrgsSlugRouteWithChildren,

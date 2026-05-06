@@ -1541,6 +1541,28 @@
         }
       }
     },
+    "/admin/me": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Admin Me",
+        "description": "Return the staff actor's identity. Non-staff get 403 from the dep.",
+        "operationId": "admin_me_admin_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -1638,6 +1660,43 @@
           "SERVICE"
         ],
         "title": "ActorType"
+      },
+      "AdminMeResponse": {
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Actor Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "is_platform_staff": {
+            "type": "boolean",
+            "title": "Is Platform Staff"
+          }
+        },
+        "type": "object",
+        "required": [
+          "actor_id",
+          "email",
+          "display_name",
+          "is_platform_staff"
+        ],
+        "title": "AdminMeResponse",
+        "description": "Returned by `GET /admin/me`. Used by the frontend to gate the\nAdminShell \u2014 non-staff actors get 403 from the dependency before this\ntype is ever serialised, so `is_platform_staff` is always True here."
       },
       "CurrentActor": {
         "properties": {

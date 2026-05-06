@@ -18,12 +18,14 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from fastsaas.audit.context import IntentContext, set_audit_context
 from fastsaas.config import get_settings
 from fastsaas.identity.auth.password import hash_password
 from fastsaas.identity.models import Actor, ActorType, User
+from fastsaas.identity.schemas import CurrentActor
 from fastsaas.tenants.models import OrganisationRole
 from fastsaas.tenants.service import (
     MembershipService,
@@ -87,46 +89,86 @@ async def seed() -> None:
                 actor = await _create_actor(s, email=email, display_name=display)
                 actor_ids[email] = str(actor.id)
 
+            # Dev-only convenience: promote the founder to platform staff so
+            # `/admin/*` is reachable out of the box. Production deployments
+            # bootstrap via `make seed-platform-staff USER_EMAIL=...` per
+            # ADR-019; the dev seed predefines the operator identity, so the
+            # equivalent flip happens here without an extra step.
+            await s.execute(
+                text(
+                    "UPDATE actors SET is_platform_staff = TRUE WHERE id = :id"
+                ),
+                {"id": actor_ids[SEED_USERS[0][0]]},
+            )
+
         # ── Org + projects (owner) ────────────────────────────────────────
+        # Service-layer mutations write `audit_log` rows that read the actor
+        # + intent from contextvars (per ADR-010 amendment). The seed runs
+        # outside an HTTP request, so we set the context manually with the
+        # founder as the audit actor — every audit row produced by the seed
+        # will list founder as the originating actor.
         founder_email, _, _ = SEED_USERS[0]
         founder_id = actor_ids[founder_email]
 
         from uuid import UUID
 
-        org = await OrganisationService.create(
-            name=SEED_ORG_NAME,
-            slug=SEED_ORG_SLUG,
-            owner_actor_id=UUID(founder_id),
+        founder_actor = CurrentActor(
+            actor_id=UUID(founder_id),
+            actor_type=ActorType.HUMAN,
+            parent_actor_id=None,
+            email=founder_email,
+            email_verified=True,
         )
-
-        for slug, name in SEED_PROJECTS:
-            await ProjectService.create(
-                org_id=org.id,
-                name=name,
-                slug=slug,
-                description=None,
-                created_by=UUID(founder_id),
+        seed_intent = IntentContext(
+            intent_hash="req:seed-dev",
+            intent_metadata={"source": "seed-dev"},
+        )
+        with set_audit_context(founder_actor, intent=seed_intent):
+            org = await OrganisationService.create(
+                name=SEED_ORG_NAME,
+                slug=SEED_ORG_SLUG,
+                owner_actor_id=UUID(founder_id),
             )
 
-        # ── Invite + accept the non-owner members ─────────────────────────
-        for email, _display, role in SEED_USERS[1:]:
-            raw, _inv = await MembershipService.invite(
-                org_id=org.id,
-                email=email,
-                role=role,
-                invited_by=UUID(founder_id),
-            )
-            await MembershipService.accept(
-                raw_token=raw,
-                accepting_actor_id=UUID(actor_ids[email]),
-            )
+            for slug, name in SEED_PROJECTS:
+                await ProjectService.create(
+                    org_id=org.id,
+                    name=name,
+                    slug=slug,
+                    description=None,
+                    created_by=UUID(founder_id),
+                )
+
+            # Invite path runs as the founder (the org admin issuing the
+            # invitation); accept path swaps the audit actor to the invitee
+            # so the accept-row is attributed correctly.
+            for email, _display, role in SEED_USERS[1:]:
+                raw, _inv = await MembershipService.invite(
+                    org_id=org.id,
+                    email=email,
+                    role=role,
+                    invited_by=UUID(founder_id),
+                )
+                invitee = CurrentActor(
+                    actor_id=UUID(actor_ids[email]),
+                    actor_type=ActorType.HUMAN,
+                    parent_actor_id=None,
+                    email=email,
+                    email_verified=True,
+                )
+                with set_audit_context(invitee, intent=seed_intent):
+                    await MembershipService.accept(
+                        raw_token=raw,
+                        accepting_actor_id=UUID(actor_ids[email]),
+                    )
 
         print("[seed] loaded:")
         print(f"  Org:      {org.slug} ({SEED_ORG_NAME})")
         print(f"  Projects: {', '.join(slug for slug, _ in SEED_PROJECTS)}")
         print(f"  Users (password '{SEED_PASSWORD}'):")
         for email, _display, role in SEED_USERS:
-            print(f"    {email:32s} ({role.value})")
+            extra = " [PLATFORM STAFF]" if email == SEED_USERS[0][0] else ""
+            print(f"    {email:32s} ({role.value}){extra}")
     finally:
         await eng.dispose()
 
