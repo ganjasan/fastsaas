@@ -55,6 +55,15 @@ export default defineConfig(({ mode }) => {
             if (req.headers.accept?.includes("text/html")) return req.url;
           },
         },
+        // /admin/* is shared between the SPA's `routes/admin.*` and backend
+        // staff-only endpoints — same Accept-header bypass as /auth and /orgs.
+        "/admin": {
+          target: apiBase,
+          changeOrigin: true,
+          bypass(req) {
+            if (req.headers.accept?.includes("text/html")) return req.url;
+          },
+        },
       },
     },
   };
