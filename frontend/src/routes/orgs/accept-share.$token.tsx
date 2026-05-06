@@ -4,7 +4,7 @@
  * the project they're now allowed to read.
  */
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAcceptProjectShareOrgsProjectsAcceptSharePost } from "@/api/generated/projects/projects";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,12 @@ function AcceptSharePage() {
   const accept = useAcceptProjectShareOrgsProjectsAcceptSharePost();
 
   const [status, setStatus] = useState<"pending" | "ok" | "expired" | "auth" | "error">("pending");
+  // Share-accept is a single-use mutation. React Strict Mode (vite dev)
+  // remounts effects, which would fire mutateAsync twice — the first call
+  // consumes the token, the second sees `share.not_found_or_expired`. Gate
+  // with a module-scoped ref keyed on the token so each token is accepted
+  // at most once per page lifetime.
+  const acceptedRef = useRef<string | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: single-shot accept; non-listed deps are stable refs
   useEffect(() => {
@@ -32,6 +38,9 @@ function AcceptSharePage() {
       setStatus("auth");
       return;
     }
+    if (acceptedRef.current === token) return;
+    acceptedRef.current = token;
+
     let cancelled = false;
     (async () => {
       try {

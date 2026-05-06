@@ -22,6 +22,7 @@ describe("Breadcrumb", () => {
     ["/orgs/acme/", "Overview"],
     ["/orgs/acme/projects", "Projects"],
     ["/orgs/acme/projects/q4", "Project"],
+    ["/orgs/acme/projects/q4/sharing", "Sharing"],
     ["/orgs/acme/settings", "Settings"],
     ["/orgs/acme/settings/members", "Members"],
     ["/orgs/acme/settings/branding", "Branding"],

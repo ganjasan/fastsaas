@@ -34,6 +34,8 @@ import { Route as OrgsSlugProjectsIndexRouteImport } from './routes/orgs/$slug.p
 import { Route as OrgsSlugSettingsMembersRouteImport } from './routes/orgs/$slug.settings.members'
 import { Route as OrgsSlugSettingsBrandingRouteImport } from './routes/orgs/$slug.settings.branding'
 import { Route as OrgsSlugProjectsProjectSlugRouteImport } from './routes/orgs/$slug.projects.$projectSlug'
+import { Route as OrgsSlugProjectsProjectSlugIndexRouteImport } from './routes/orgs/$slug.projects.$projectSlug.index'
+import { Route as OrgsSlugProjectsProjectSlugSharingRouteImport } from './routes/orgs/$slug.projects.$projectSlug.sharing'
 
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
@@ -162,6 +164,18 @@ const OrgsSlugProjectsProjectSlugRoute =
     path: '/projects/$projectSlug',
     getParentRoute: () => OrgsSlugRoute,
   } as any)
+const OrgsSlugProjectsProjectSlugIndexRoute =
+  OrgsSlugProjectsProjectSlugIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => OrgsSlugProjectsProjectSlugRoute,
+  } as any)
+const OrgsSlugProjectsProjectSlugSharingRoute =
+  OrgsSlugProjectsProjectSlugSharingRouteImport.update({
+    id: '/sharing',
+    path: '/sharing',
+    getParentRoute: () => OrgsSlugProjectsProjectSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -185,10 +199,12 @@ export interface FileRoutesByFullPath {
   '/orgs/accept-invite/$token': typeof OrgsAcceptInviteTokenRoute
   '/orgs/accept-share/$token': typeof OrgsAcceptShareTokenRoute
   '/orgs/$slug/': typeof OrgsSlugIndexRoute
-  '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugRoute
+  '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugRouteWithChildren
   '/orgs/$slug/settings/branding': typeof OrgsSlugSettingsBrandingRoute
   '/orgs/$slug/settings/members': typeof OrgsSlugSettingsMembersRoute
   '/orgs/$slug/projects/': typeof OrgsSlugProjectsIndexRoute
+  '/orgs/$slug/projects/$projectSlug/sharing': typeof OrgsSlugProjectsProjectSlugSharingRoute
+  '/orgs/$slug/projects/$projectSlug/': typeof OrgsSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -210,10 +226,11 @@ export interface FileRoutesByTo {
   '/orgs/accept-invite/$token': typeof OrgsAcceptInviteTokenRoute
   '/orgs/accept-share/$token': typeof OrgsAcceptShareTokenRoute
   '/orgs/$slug': typeof OrgsSlugIndexRoute
-  '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugRoute
   '/orgs/$slug/settings/branding': typeof OrgsSlugSettingsBrandingRoute
   '/orgs/$slug/settings/members': typeof OrgsSlugSettingsMembersRoute
   '/orgs/$slug/projects': typeof OrgsSlugProjectsIndexRoute
+  '/orgs/$slug/projects/$projectSlug/sharing': typeof OrgsSlugProjectsProjectSlugSharingRoute
+  '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -238,10 +255,12 @@ export interface FileRoutesById {
   '/orgs/accept-invite/$token': typeof OrgsAcceptInviteTokenRoute
   '/orgs/accept-share/$token': typeof OrgsAcceptShareTokenRoute
   '/orgs/$slug/': typeof OrgsSlugIndexRoute
-  '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugRoute
+  '/orgs/$slug/projects/$projectSlug': typeof OrgsSlugProjectsProjectSlugRouteWithChildren
   '/orgs/$slug/settings/branding': typeof OrgsSlugSettingsBrandingRoute
   '/orgs/$slug/settings/members': typeof OrgsSlugSettingsMembersRoute
   '/orgs/$slug/projects/': typeof OrgsSlugProjectsIndexRoute
+  '/orgs/$slug/projects/$projectSlug/sharing': typeof OrgsSlugProjectsProjectSlugSharingRoute
+  '/orgs/$slug/projects/$projectSlug/': typeof OrgsSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -271,6 +290,8 @@ export interface FileRouteTypes {
     | '/orgs/$slug/settings/branding'
     | '/orgs/$slug/settings/members'
     | '/orgs/$slug/projects/'
+    | '/orgs/$slug/projects/$projectSlug/sharing'
+    | '/orgs/$slug/projects/$projectSlug/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -292,10 +313,11 @@ export interface FileRouteTypes {
     | '/orgs/accept-invite/$token'
     | '/orgs/accept-share/$token'
     | '/orgs/$slug'
-    | '/orgs/$slug/projects/$projectSlug'
     | '/orgs/$slug/settings/branding'
     | '/orgs/$slug/settings/members'
     | '/orgs/$slug/projects'
+    | '/orgs/$slug/projects/$projectSlug/sharing'
+    | '/orgs/$slug/projects/$projectSlug'
   id:
     | '__root__'
     | '/'
@@ -323,6 +345,8 @@ export interface FileRouteTypes {
     | '/orgs/$slug/settings/branding'
     | '/orgs/$slug/settings/members'
     | '/orgs/$slug/projects/'
+    | '/orgs/$slug/projects/$projectSlug/sharing'
+    | '/orgs/$slug/projects/$projectSlug/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -517,6 +541,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgsSlugProjectsProjectSlugRouteImport
       parentRoute: typeof OrgsSlugRoute
     }
+    '/orgs/$slug/projects/$projectSlug/': {
+      id: '/orgs/$slug/projects/$projectSlug/'
+      path: '/'
+      fullPath: '/orgs/$slug/projects/$projectSlug/'
+      preLoaderRoute: typeof OrgsSlugProjectsProjectSlugIndexRouteImport
+      parentRoute: typeof OrgsSlugProjectsProjectSlugRoute
+    }
+    '/orgs/$slug/projects/$projectSlug/sharing': {
+      id: '/orgs/$slug/projects/$projectSlug/sharing'
+      path: '/sharing'
+      fullPath: '/orgs/$slug/projects/$projectSlug/sharing'
+      preLoaderRoute: typeof OrgsSlugProjectsProjectSlugSharingRouteImport
+      parentRoute: typeof OrgsSlugProjectsProjectSlugRoute
+    }
   }
 }
 
@@ -555,17 +593,36 @@ const OrgsSlugSettingsRouteChildren: OrgsSlugSettingsRouteChildren = {
 const OrgsSlugSettingsRouteWithChildren =
   OrgsSlugSettingsRoute._addFileChildren(OrgsSlugSettingsRouteChildren)
 
+interface OrgsSlugProjectsProjectSlugRouteChildren {
+  OrgsSlugProjectsProjectSlugSharingRoute: typeof OrgsSlugProjectsProjectSlugSharingRoute
+  OrgsSlugProjectsProjectSlugIndexRoute: typeof OrgsSlugProjectsProjectSlugIndexRoute
+}
+
+const OrgsSlugProjectsProjectSlugRouteChildren: OrgsSlugProjectsProjectSlugRouteChildren =
+  {
+    OrgsSlugProjectsProjectSlugSharingRoute:
+      OrgsSlugProjectsProjectSlugSharingRoute,
+    OrgsSlugProjectsProjectSlugIndexRoute:
+      OrgsSlugProjectsProjectSlugIndexRoute,
+  }
+
+const OrgsSlugProjectsProjectSlugRouteWithChildren =
+  OrgsSlugProjectsProjectSlugRoute._addFileChildren(
+    OrgsSlugProjectsProjectSlugRouteChildren,
+  )
+
 interface OrgsSlugRouteChildren {
   OrgsSlugSettingsRoute: typeof OrgsSlugSettingsRouteWithChildren
   OrgsSlugIndexRoute: typeof OrgsSlugIndexRoute
-  OrgsSlugProjectsProjectSlugRoute: typeof OrgsSlugProjectsProjectSlugRoute
+  OrgsSlugProjectsProjectSlugRoute: typeof OrgsSlugProjectsProjectSlugRouteWithChildren
   OrgsSlugProjectsIndexRoute: typeof OrgsSlugProjectsIndexRoute
 }
 
 const OrgsSlugRouteChildren: OrgsSlugRouteChildren = {
   OrgsSlugSettingsRoute: OrgsSlugSettingsRouteWithChildren,
   OrgsSlugIndexRoute: OrgsSlugIndexRoute,
-  OrgsSlugProjectsProjectSlugRoute: OrgsSlugProjectsProjectSlugRoute,
+  OrgsSlugProjectsProjectSlugRoute:
+    OrgsSlugProjectsProjectSlugRouteWithChildren,
   OrgsSlugProjectsIndexRoute: OrgsSlugProjectsIndexRoute,
 }
 

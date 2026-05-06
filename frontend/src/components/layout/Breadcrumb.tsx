@@ -19,7 +19,8 @@ const SECTION_FROM_PATH: Array<[RegExp, string]> = [
   [/\/orgs\/[^/]+\/settings\/members$/, "Members"],
   [/\/orgs\/[^/]+\/settings\/branding$/, "Branding"],
   [/\/orgs\/[^/]+\/settings$/, "Settings"],
-  [/\/orgs\/[^/]+\/projects\/[^/]+$/, "Project"],
+  [/\/orgs\/[^/]+\/projects\/[^/]+\/sharing\/?$/, "Sharing"],
+  [/\/orgs\/[^/]+\/projects\/[^/]+\/?$/, "Project"],
   [/\/orgs\/[^/]+\/projects$/, "Projects"],
   [/\/orgs\/[^/]+\/?$/, "Overview"],
 ];

@@ -6,16 +6,17 @@
  * `/orgs/accept-invite/{token}`, `/orgs/accept-share/{token}`) render
  * without this shell.
  */
-import { FolderKanban, LayoutDashboard, Menu, Settings } from "lucide-react";
+import { Menu } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { NewMenu } from "@/components/layout/NewMenu";
 import { SearchTrigger } from "@/components/layout/SearchTrigger";
-import { type NavSection, Shell, useSidebarDrawer } from "@/components/layout/Shell";
+import { Shell, useSidebarDrawer } from "@/components/layout/Shell";
 import { SidebarBottomChrome } from "@/components/layout/SidebarBottomChrome";
 import { ThemeModeToggle } from "@/components/layout/ThemeModeToggle";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { useDashboardSections } from "@/components/layout/dashboardNav";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSwitcher } from "@/features/orgs/components/WorkspaceSwitcher";
 import { useOrgStore } from "@/features/orgs/lib/orgStore";
@@ -24,28 +25,9 @@ interface AppShellProps {
   children: ReactNode;
 }
 
-function buildSections(slug: string): NavSection[] {
-  // FastSaaS org-level dashboard ships two items today; future domain
-  // features extend this list. No section labels at this size — Render
-  // aesthetic shows them only when there are multiple groups.
-  return [
-    {
-      items: [
-        { to: `/orgs/${slug}`, label: "Overview", icon: LayoutDashboard, exact: true },
-        { to: `/orgs/${slug}/projects`, label: "Projects", icon: FolderKanban },
-        {
-          to: `/orgs/${slug}/settings/members`,
-          label: "Settings",
-          icon: Settings,
-        },
-      ],
-    },
-  ];
-}
-
 export function AppShell({ children }: AppShellProps): ReactNode {
   const slug = useOrgStore((s) => s.currentOrgSlug) ?? "";
-  const sections = buildSections(slug);
+  const sections = useDashboardSections(slug);
 
   return (
     <Shell
