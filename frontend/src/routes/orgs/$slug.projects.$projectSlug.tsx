@@ -9,6 +9,7 @@ import { useGetProjectOrgsSlugProjectsProjectSlugGet } from "@/api/generated/pro
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ProjectSharing } from "@/features/projects/components/ProjectSharing";
 
 export const Route = createFileRoute("/orgs/$slug/projects/$projectSlug")({
   component: ProjectDetailPage,
@@ -40,8 +41,8 @@ function ProjectDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <header className="mb-6">
+    <div className="mx-auto max-w-4xl space-y-8">
+      <header>
         <h1 className="text-2xl font-semibold tracking-tight">{data.name}</h1>
         <p className="text-sm text-muted-foreground">
           {slug} · {data.slug}
@@ -50,6 +51,9 @@ function ProjectDetailPage() {
           <p className="mt-2 text-sm text-foreground">{data.description}</p>
         ) : null}
       </header>
+
+      <ProjectSharing slug={slug} projectSlug={projectSlug} />
+
       <Card>
         <CardHeader>
           <CardTitle>Coming soon</CardTitle>

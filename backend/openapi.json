@@ -2321,6 +2321,10 @@
             "type": "string",
             "format": "date-time",
             "title": "Expires At"
+          },
+          "raw_token": {
+            "type": "string",
+            "title": "Raw Token"
           }
         },
         "type": "object",
@@ -2328,9 +2332,11 @@
           "id",
           "project_id",
           "email",
-          "expires_at"
+          "expires_at",
+          "raw_token"
         ],
-        "title": "ProjectShareResponse"
+        "title": "ProjectShareResponse",
+        "description": "Returned by `POST /orgs/{slug}/projects/{slug}/shares`.\n\n`raw_token` is the one-time disclosure of the share token: the backend\nonly stores `sha256(token)`, so this is the operator's single chance to\ncopy the invite link before navigating away. The token is also delivered\nto the recipient via email; this field gives the inviting admin the\nsame link so they can paste it into a private channel out-of-band.\n\n`ProjectShareItem` (used by `GET /shares`) deliberately omits this\nfield \u2014 the raw token is irrecoverable once this response is gone."
       },
       "ProjectUpdateRequest": {
         "properties": {
