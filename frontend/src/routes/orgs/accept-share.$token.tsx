@@ -10,6 +10,7 @@ import { useAcceptProjectShareOrgsProjectsAcceptSharePost } from "@/api/generate
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthStore } from "@/features/auth/lib/authStore";
+import { setPostAuthRedirect } from "@/features/auth/lib/postAuthRedirect";
 import { useOrgStore } from "@/features/orgs/lib/orgStore";
 import type { ApiError } from "@/lib/api/client";
 
@@ -41,11 +42,16 @@ function AcceptSharePage() {
     if (acceptedRef.current === token) return;
     acceptedRef.current = token;
 
-    let cancelled = false;
-    (async () => {
+    // No cleanup-flag pattern: under React Strict Mode the cleanup runs
+    // BEFORE the async work resolves, which would zero out the success
+    // handler (the token gets consumed on the network but the UI never
+    // navigates). The `acceptedRef` gate above already guarantees the
+    // mutation fires exactly once — single-shot is safe to await
+    // unconditionally. `navigate()` and the store setters are global, so
+    // they still apply after a strict-mode remount.
+    void (async () => {
       try {
         const res = await accept.mutateAsync({ data: { token } });
-        if (cancelled) return;
         setSlug(res.org_slug);
         await navigate({
           to: "/orgs/$slug/projects/$projectSlug",
@@ -53,22 +59,30 @@ function AcceptSharePage() {
         });
         setStatus("ok");
       } catch (e) {
-        if (cancelled) return;
         const code = (e as ApiError | undefined)?.body
           ? ((e as ApiError).body as { detail?: { code?: string } })?.detail?.code
           : undefined;
         setStatus(code === "share.not_found_or_expired" ? "expired" : "error");
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [accessToken, token]);
 
   if (status === "auth") {
+    const stashAndGo = (target: "/auth/login" | "/auth/register") => {
+      setPostAuthRedirect(`/orgs/accept-share/${token}`);
+      void navigate({ to: target });
+    };
     return (
       <Frame title="Sign in to view the shared project">
-        <Button onClick={() => navigate({ to: "/auth/login" })}>Sign in</Button>
+        <p className="text-sm text-muted-foreground">
+          You'll come back here automatically after signing in.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <Button onClick={() => stashAndGo("/auth/login")}>Sign in</Button>
+          <Button variant="outline" onClick={() => stashAndGo("/auth/register")}>
+            Create an account
+          </Button>
+        </div>
       </Frame>
     );
   }

@@ -113,8 +113,9 @@ export function ProjectSharing({ slug, projectSlug }: ProjectSharingProps) {
       <header>
         <h2 className="text-lg font-semibold tracking-tight">Sharing</h2>
         <p className="text-sm text-muted-foreground">
-          Issue a one-time read-only invite link. Each link binds to the recipient's email and
-          expires automatically. Guests see only this project — never your org's other work.
+          Issue a one-time read-only invite link. Anyone who opens the link gets read access — the
+          email field is just where we deliver it. Guests see only this project, never your org's
+          other work.
         </p>
       </header>
 
@@ -122,8 +123,8 @@ export function ProjectSharing({ slug, projectSlug }: ProjectSharingProps) {
         <CardHeader>
           <CardTitle className="text-base">Invite a guest</CardTitle>
           <CardDescription>
-            They'll receive an email with the invite link. The link is one-time and binds to this
-            email address.
+            We'll email this address an invite link. Anyone who opens the link gets read access to
+            this project — the link is single-use, so don't forward it.
           </CardDescription>
         </CardHeader>
         <CardContent>

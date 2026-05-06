@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/features/auth/components/AuthCard";
 import { useAuthStore } from "@/features/auth/lib/authStore";
+import { consumePostAuthRedirect } from "@/features/auth/lib/postAuthRedirect";
 import { type LoginInput, loginSchema } from "@/features/auth/lib/schemas";
 import type { ApiError } from "@/lib/api/client";
 
@@ -52,11 +53,15 @@ function LoginPage() {
       void meQuery.refetch().then((actor) => {
         if (actor.data) setCurrentActor(actor.data);
       });
-      // Land directly on /orgs — that's where the workplace lives. Going
-      // through "/" first means a full reload (which would drop the
-      // in-memory access token per ADR-008 hybrid storage); SPA-navigating
-      // straight to /orgs keeps the session in memory.
-      await navigate({ to: "/orgs" });
+      // Honour a pending post-auth redirect (e.g. /orgs/accept-share/{token}
+      // stashed before the user signed in). Falls back to /orgs.
+      const pending = consumePostAuthRedirect();
+      if (pending !== null) {
+        // TanStack Router types want a known route; cast for the dynamic path.
+        await navigate({ to: pending as "/orgs" });
+      } else {
+        await navigate({ to: "/orgs" });
+      }
     } catch (e) {
       const code = (e as ApiError | undefined)?.body
         ? ((e as ApiError).body as { detail?: { code?: string } })?.detail?.code
