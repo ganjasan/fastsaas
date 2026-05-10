@@ -1,0 +1,48 @@
+# Drydock — per-repo configuration for FastSaaS.
+#
+# Layer precedence (later wins):
+#   1. ${CLAUDE_PLUGIN_ROOT}/config.yaml       (plugin defaults)
+#   2. ~/.drydock/config.yaml                   (user-level)
+#   3. <repo>/.drydock/config.yaml              (this file — wins)
+#
+# Schema: ~/.claude/plugins/drydock/docs/extension-model.md
+
+version: "0.2.0"
+
+# ---------------------------------------------------------------------------
+# Paths — FastSaaS uses non-default subdirs under requirements/
+# ---------------------------------------------------------------------------
+paths:
+  requirements: requirements
+  requirements_subdirs:
+    vision:        vision
+    stakeholders:  formal/stakeholders
+    use_cases:     formal/use-cases
+    adr:           decisions
+  openspec:
+    changes: openspec/changes
+    specs:   openspec/specs
+
+# ---------------------------------------------------------------------------
+# GitHub integration
+# Tracker = GitHub Issues at ganjasan/fastsaas. No GitHub Project board (yet).
+# Existing label conventions:
+#   type/{feature,chore,task,epic}
+#   priority/{P0,P1,P2}
+#   epic/<slug>      (e.g. epic/abuse-prevention)
+#   area/<slug>      (e.g. area/auth, area/security)
+# ---------------------------------------------------------------------------
+github:
+  org: ganjasan
+  triage_label: status/needs-triage
+  adr_creates_issue: false
+
+# ---------------------------------------------------------------------------
+# Worktree convention
+# Per CLAUDE.md: "Branch off main for every change. The branch name should
+# mirror the OpenSpec change slug (feature/<N>-<slug>)." No worktrees — work
+# happens in the main working tree on a feature branch.
+# ---------------------------------------------------------------------------
+worktree:
+  enabled: false
+  branch_naming: feature/<issue-id>-<slug>

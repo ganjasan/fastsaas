@@ -61,6 +61,16 @@ pass.
   `await audit.record(db, ...)` explicitly inside the same transaction
   as the mutation. Skipping audit is the most expensive class of bug
   this codebase can ship.
+- **Task tracker is GitHub Issues at `ganjasan/fastsaas`. Never use
+  `/backlog:*` commands.** Those skills assume an
+  `openspec/backlog/INDEX.md` layout that does not exist here and is
+  denied in `.claude/settings.json`. Use `gh issue create` (or
+  `/dd:plan:add`) with the existing label conventions:
+  `type/{feature,chore,task,epic}`, `priority/{P0,P1,P2}`,
+  `epic/<slug>` (e.g. `epic/abuse-prevention`), `area/<slug>`. An
+  "epic" is a GitHub label, not a separate file. `openspec/changes/`
+  is for **active** in-flight change packages, not a backlog —
+  promote a triaged issue with `/dd:plan:promote`.
 
 ## Where to look
 
