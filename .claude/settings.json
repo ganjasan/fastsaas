@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Skill(backlog:add)",
+      "Skill(backlog:list)",
+      "Skill(backlog:edit)",
+      "Skill(backlog:drop)",
+      "Skill(backlog:status)",
+      "Skill(backlog:explore)",
+      "Skill(backlog:promote)",
+      "Skill(backlog:epic-add)",
+      "Skill(backlog:epic-list)",
+      "Skill(backlog:github-sync)",
+      "Skill(backlog:_github-sync-rules)"
+    ]
+  }
+}

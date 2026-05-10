@@ -38,3 +38,7 @@ build/
 # Per-env overrides
 .env.local
 .env.*.local
+
+# Claude Code runtime artifacts (track .claude/settings.json explicitly)
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
